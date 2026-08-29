@@ -36,6 +36,21 @@ def calculate_paddler_sync(spm1: float, spm2: float, accel1: float, accel2: floa
     return sync_pct, round(spm_diff, 1)
 
 
+def get_sync_light_status(sync_pct: float) -> tuple[str, str, str]:
+    """
+    Classify crew synchronization into Red-Yellow-Green traffic light indicator:
+    - GREEN  (>= 85%): Almost / perfectly in sync (Optimal Drive)
+    - YELLOW (70% - 84.9%): Closer to sync (Moderate Cadence Gap)
+    - RED    (< 70%): Out of sync (Major Rhythm Mismatch)
+    """
+    if sync_pct >= 85.0:
+        return "GREEN", "#9beec3", "In Sync"
+    elif sync_pct >= 70.0:
+        return "YELLOW", "#ffb830", "Closer to Sync"
+    else:
+        return "RED", "#ff4d4d", "Out of Sync"
+
+
 def detect_paddling_side(roll_deg: float, prev_side: str) -> tuple[str, bool]:
     """Detect whether paddler is driving on STARBOARD (RIGHT) or PORT (LEFT) side based on IMU roll trim."""
     new_side = prev_side
@@ -165,6 +180,7 @@ def main() -> None:
                 paddler_2_side, side_switch_2 = detect_paddling_side(roll2, paddler_2_side)
 
                 sync_pct, spm_delta = calculate_paddler_sync(spm1, spm2, accel1, accel2)
+                light_status, light_hex, light_label = get_sync_light_status(sync_pct)
                 avg_spm = round((spm1 + spm2) / 2.0, 1)
 
                 now_ms = int(now_t * 1000)
@@ -174,6 +190,9 @@ def main() -> None:
                     "stroke_rate_spm": avg_spm,
                     "peak_accel_g": round(accel1, 3),
                     "sync_percentage": sync_pct,
+                    "sync_light_status": light_status,
+                    "sync_light_color": light_hex,
+                    "sync_light_label": light_label,
                     "spm_delta": spm_delta,
                     "side_switch_active": (side_switch_1 or side_switch_2),
                     "paddler_1": {
@@ -205,8 +224,9 @@ def main() -> None:
                 }
                 log.write(json.dumps(record) + "\n")
                 log.flush()
+                light_emoji = "🟢" if light_status == "GREEN" else ("🟡" if light_status == "YELLOW" else "🔴")
                 print(
-                    f"[DUAL PADDLE] Sync: {sync_pct}% | Avg SPM: {avg_spm} | "
+                    f"[DUAL PADDLE] {light_emoji} Light: {light_status} ({sync_pct}%) | Avg SPM: {avg_spm} | "
                     f"P1 (192.168.11.219): {spm1} SPM ({accel1:.2f}g) | P2: {spm2} SPM ({accel2:.2f}g)"
                 )
                 time.sleep(0.8)

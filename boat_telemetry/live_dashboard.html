@@ -38,11 +38,25 @@
     
     .btn-action { padding: 10px 20px; background: linear-gradient(135deg, #0d8bb0, #046b8c); border: none; border-radius: 8px; color: white; font-weight: 700; cursor: pointer; transition: opacity 0.2s; margin-bottom: 12px; }
     .btn-action:hover { opacity: 0.9; }
+
+    /* Traffic Light Sync Indicator Styles */
+    .traffic-light-box { position: absolute; z-index: 4; right: 18px; top: 12px; display: flex; flex-direction: column; align-items: center; background: rgba(6, 24, 39, 0.88); border: 1px solid #23516d; padding: 6px 12px; border-radius: 12px; backdrop-filter: blur(6px); box-shadow: 0 6px 12px rgba(0,0,0,0.4); }
+    .light-title { font-size: 0.62rem; color: #82a8bc; font-weight: 800; letter-spacing: 0.1em; margin-bottom: 4px; }
+    .traffic-housing { display: flex; gap: 8px; background: #030d15; border: 1px solid #142e42; padding: 5px 10px; border-radius: 20px; }
+    .led { width: 14px; height: 14px; border-radius: 50%; opacity: 0.2; transition: all 0.3s ease; }
+    .led.red { background: #ff4d4d; }
+    .led.red.active { opacity: 1.0; box-shadow: 0 0 14px #ff4d4d; }
+    .led.yellow { background: #ffb830; }
+    .led.yellow.active { opacity: 1.0; box-shadow: 0 0 14px #ffb830; }
+    .led.green { background: #9beec3; }
+    .led.green.active { opacity: 1.0; box-shadow: 0 0 14px #9beec3; }
+    .light-status-label { font-size: 0.68rem; font-weight: 800; color: #9beec3; margin-top: 3px; letter-spacing: 0.05em; }
   </style>
 
   <section class="badge-row">
     <div class="badge active">🍓 Raspberry Pi 5 Core</div>
     <div id="gemma-model-badge" class="badge active">🤖 Local Gemma Model: Detect…</div>
+    <div id="sync-light-badge" class="badge active">🟢 SYNC: IN SYNC (95%)</div>
     <div id="p1-side-badge" class="badge active">🚣 P1: STARBOARD (RIGHT)</div>
     <div id="p2-side-badge" class="badge active">🚣 P2: PORT (LEFT)</div>
     <div id="side-switch-badge" class="badge" style="display:none;">🔄 SIDE SWITCH DETECTED!</div>
@@ -59,6 +73,17 @@
 
   <section class="water" aria-label="Animated water crest showing boat & paddler motion">
     <div class="live-tag">LIVE SENSORS & DUAL PADDLER ANIMATION</div>
+
+    <!-- Hardware Sync Traffic Light System -->
+    <div class="traffic-light-box" title="Hardware Paddle Sync Traffic Light System">
+      <div class="light-title">PADDLE SYNC LIGHT</div>
+      <div class="traffic-housing">
+        <div id="light-red" class="led red"></div>
+        <div id="light-yellow" class="led yellow"></div>
+        <div id="light-green" class="led green active"></div>
+      </div>
+      <div id="light-status-text" class="light-status-label">IN SYNC (GREEN)</div>
+    </div>
     
     <!-- SVG Interactive Racing Shell & Dual Paddler Animation -->
     <div id="boat-container" class="boat-graphic">
@@ -318,6 +343,44 @@
           $('dps-m').textContent = `${dps.toFixed(2)} m/stroke`;
         } else {
           $('dps-m').textContent = '—';
+        }
+
+        // Hardware Sync Traffic Light System Evaluation (GREEN >= 85%, YELLOW 70-84.9%, RED < 70%)
+        let status = data.sync_light_status;
+        if (!status) {
+          if (syncPct >= 85.0) status = 'GREEN';
+          else if (syncPct >= 70.0) status = 'YELLOW';
+          else status = 'RED';
+        }
+
+        const redLed = $('light-red');
+        const yellowLed = $('light-yellow');
+        const greenLed = $('light-green');
+        const lightText = $('light-status-text');
+        const syncBadge = $('sync-light-badge');
+
+        if (redLed) redLed.className = `led red ${status === 'RED' ? 'active' : ''}`;
+        if (yellowLed) yellowLed.className = `led yellow ${status === 'YELLOW' ? 'active' : ''}`;
+        if (greenLed) greenLed.className = `led green ${status === 'GREEN' ? 'active' : ''}`;
+
+        if (lightText) {
+          if (status === 'GREEN') {
+            lightText.textContent = `IN SYNC (GREEN)`;
+            lightText.style.color = '#9beec3';
+          } else if (status === 'YELLOW') {
+            lightText.textContent = `CLOSER (YELLOW)`;
+            lightText.style.color = '#ffb830';
+          } else {
+            lightText.textContent = `OUT OF SYNC (RED)`;
+            lightText.style.color = '#ff4d4d';
+          }
+        }
+
+        if (syncBadge) {
+          const emoji = status === 'GREEN' ? '🟢' : (status === 'YELLOW' ? '🟡' : '🔴');
+          const label = status === 'GREEN' ? 'IN SYNC' : (status === 'YELLOW' ? 'CLOSER TO SYNC' : 'OUT OF SYNC');
+          syncBadge.textContent = `${emoji} SYNC: ${label} (${Number(syncPct).toFixed(1)}%)`;
+          syncBadge.className = `badge ${status === 'RED' ? 'alert' : 'active'}`;
         }
 
         // Update Side Badges
