@@ -18,11 +18,15 @@ echo "========================================================================="
 echo "🍓 THUZHAYAN Physical AI System — Launching on Raspberry Pi 5"
 echo "========================================================================="
 echo "📍 Workspace Path : $WORKSPACE_DIR"
-echo "🚣 Paddler IP     : http://192.168.11.219/"
-echo "🤖 Edge AI Model   : Local Gemma (Ollama RPi 5 Edge Engine)"
+echo "🚣 Paddler 1 IP   : http://192.168.11.240/"
+echo "🚣 Paddler 2 IP   : http://192.168.11.219/"
+echo "🤖 Edge AI Model   : Local Gemma 2B (Ollama RPi 5 Edge Engine)"
 echo "☁️ Cloud Analytics : Google Cloud Gemini API"
 echo "========================================================================="
 echo ""
+
+# Export local Gemma 2B model preference for RPi 5
+export GEMMA_MODEL="gemma:2b"
 
 # Cleanup background processes on exit
 cleanup() {
@@ -39,9 +43,9 @@ python3 boat_telemetry/sitl_reader.py --connection auto &
 PID_BOAT=$!
 sleep 1
 
-# 2. Start Paddler Hardware Telemetry Service (http://192.168.11.219/)
-echo "--> 2/3 Starting Paddler Hardware Telemetry Reader (http://192.168.11.219/)..."
-python3 paddle_telemetry/paddle_reader.py --url http://192.168.11.219/ &
+# 2. Start Dual Paddler Hardware Telemetry Service (.240 & .219)
+echo "--> 2/3 Starting Dual Paddler Hardware Reader (192.168.11.240 & 192.168.11.219)..."
+python3 paddle_telemetry/paddle_reader.py --url1 http://192.168.11.240/ --url2 http://192.168.11.219/ &
 PID_PADDLE=$!
 sleep 1
 
@@ -50,7 +54,7 @@ echo "--> 3/3 Starting Live Dashboard & Local Gemma Model Server (Port 8080)..."
 echo "-------------------------------------------------------------------------"
 echo "🌐 LIVE DASHBOARD READY AT:"
 echo "   👉 http://127.0.0.1:8080"
-echo "   👉 http://192.168.11.219:8080 (or your Raspberry Pi 5 IP)"
+echo "   👉 http://localhost:8080 (or your Raspberry Pi 5 IP)"
 echo "-------------------------------------------------------------------------"
 
 python3 boat_telemetry/live_dashboard.py --port 8080
