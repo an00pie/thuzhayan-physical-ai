@@ -41,12 +41,24 @@ def load_recent_telemetry(boat_log: Path, paddle_log: Path):
 
 
 def discover_gemma_model(endpoint: str = "http://localhost:11434/api/tags") -> str:
-    """Auto-detect installed local Gemma model in Ollama (e.g., gemma3:4b, gemma:2b, gemma2:2b)."""
+    """Auto-detect installed local Gemma model in Ollama, prioritizing 2B models (gemma:2b, gemma2:2b)."""
+    import os
+    env_model = os.environ.get("GEMMA_MODEL")
+    if env_model:
+        return env_model
+
     try:
         req = urllib.request.Request(endpoint, method="GET")
         with urllib.request.urlopen(req, timeout=1.5) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             models = [m.get("name", "") for m in data.get("models", [])]
+            
+            # 1. First priority: exact 2b models (e.g. gemma:2b, gemma2:2b, gemma3:2b)
+            for m in models:
+                if "gemma" in m.lower() and "2b" in m.lower():
+                    return m
+
+            # 2. Second priority: any gemma model
             for m in models:
                 if "gemma" in m.lower():
                     return m
