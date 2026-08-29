@@ -23,11 +23,11 @@ fi
 
 # 4. Pull Gemma model if Ollama is running and no Gemma model is found
 if command -v ollama &> /dev/null; then
-    if ollama list 2>/dev/null | grep -i "gemma.*2b" > /dev/null; then
-        echo "--> Found existing local Gemma 2B model installed in Ollama."
+    if ollama list 2>/dev/null | grep -iE "gemma.*(1b|2b)" > /dev/null; then
+        echo "--> Found existing local Gemma model installed in Ollama."
     else
-        echo "--> Pulling Gemma 2B model for high-speed edge AI coaching on Raspberry Pi 5..."
-        ollama pull gemma:2b || echo "Ollama daemon not running yet. Run 'ollama serve' in background if needed."
+        echo "--> Pulling Gemma 1B model for high-speed edge AI coaching on Raspberry Pi 5..."
+        ollama pull gemma:1b || echo "Ollama daemon not running yet. Run 'ollama serve' in background if needed."
     fi
 fi
 

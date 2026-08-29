@@ -41,7 +41,7 @@ def load_recent_telemetry(boat_log: Path, paddle_log: Path):
 
 
 def discover_gemma_model(endpoint: str = "http://localhost:11434/api/tags") -> str:
-    """Auto-detect installed local Gemma model in Ollama, prioritizing 2B models (gemma:2b, gemma2:2b)."""
+    """Auto-detect installed local Gemma model in Ollama, prioritizing 1B models (gemma:1b, gemma3:1b, gemma2:1b)."""
     import os
     env_model = os.environ.get("GEMMA_MODEL")
     if env_model:
@@ -53,12 +53,17 @@ def discover_gemma_model(endpoint: str = "http://localhost:11434/api/tags") -> s
             data = json.loads(resp.read().decode("utf-8"))
             models = [m.get("name", "") for m in data.get("models", [])]
             
-            # 1. First priority: exact 2b models (e.g. gemma:2b, gemma2:2b, gemma3:2b)
+            # 1. First priority: exact 1b models (e.g. gemma:1b, gemma2:1b, gemma3:1b)
+            for m in models:
+                if "gemma" in m.lower() and "1b" in m.lower():
+                    return m
+
+            # 2. Second priority: 2b models
             for m in models:
                 if "gemma" in m.lower() and "2b" in m.lower():
                     return m
 
-            # 2. Second priority: any gemma model
+            # 3. Third priority: any gemma model
             for m in models:
                 if "gemma" in m.lower():
                     return m
@@ -66,7 +71,7 @@ def discover_gemma_model(endpoint: str = "http://localhost:11434/api/tags") -> s
                 return models[0]
     except Exception:
         pass
-    return "gemma:2b"
+    return "gemma:1b"
 
 
 def query_ollama_gemma(prompt: str, model: str | None = None, endpoint: str = "http://localhost:11434/api/generate", timeout: float = 6.0) -> tuple[str | None, str]:
@@ -92,7 +97,7 @@ def query_ollama_gemma(prompt: str, model: str | None = None, endpoint: str = "h
                 return res_text, model
     except Exception:
         pass
-    return None, model or "gemma:2b"
+    return None, model or "gemma:1b"
 
 
 def format_split_500m(speed_kmh: float) -> str:

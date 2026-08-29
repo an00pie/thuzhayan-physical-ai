@@ -20,13 +20,13 @@ echo "========================================================================="
 echo "📍 Workspace Path : $WORKSPACE_DIR"
 echo "🚣 Paddler 1 IP   : http://192.168.11.240/"
 echo "🚣 Paddler 2 IP   : http://192.168.11.219/"
-echo "🤖 Edge AI Model   : Local Gemma 2B (Ollama RPi 5 Edge Engine)"
+echo "🤖 Edge AI Model   : Local Gemma 1B (Ollama RPi 5 Edge Engine)"
 echo "☁️ Cloud Analytics : Google Cloud Gemini API"
 echo "========================================================================="
 echo ""
 
-# Export local Gemma 2B model preference for RPi 5
-export GEMMA_MODEL="gemma:2b"
+# Export local Gemma 1B model preference for RPi 5
+export GEMMA_MODEL="${GEMMA_MODEL:-gemma:1b}"
 
 # Cleanup background processes on exit
 cleanup() {
