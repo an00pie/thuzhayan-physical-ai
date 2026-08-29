@@ -1,13 +1,14 @@
-# Byte-compiled / optimized / DLL files
+# Python cache files
 __pycache__/
 *.py[cod]
 *$py.class
 
-# Data logs
+# Data logs & build directories
 data/
+work/
 *.jsonl
+bin/
 
-# Virtual environment
 .venv/
 env/
 venv/
