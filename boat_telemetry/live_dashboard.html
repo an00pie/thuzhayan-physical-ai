@@ -28,7 +28,7 @@
     .section-subtitle { font-size: 0.78rem; color: #82a8bc; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
     
     /* ANIMATIONS & VISUALIZERS */
-    .water-box { position: relative; height: 160px; overflow: hidden; border: 1px solid #23516d; border-radius: 12px; background: linear-gradient(#092b45 0%, #073a59 72%, #046b8c 100%); margin-bottom: 16px; }
+    .water-box { position: relative; height: 180px; overflow: hidden; border: 1px solid #23516d; border-radius: 12px; background: linear-gradient(#092b45 0%, #073a59 72%, #046b8c 100%); margin-bottom: 16px; }
     .water-box svg.waves { position: absolute; inset: 0; width: 100%; height: 100%; }
     .live-tag { position: absolute; z-index: 3; left: 16px; top: 12px; padding: 4px 10px; color: #061827; background: #9beec3; border-radius: 6px; font-size: 0.72rem; font-weight: 800; letter-spacing: .08em; }
     
@@ -74,7 +74,7 @@
   </section>
 
   <!-- ============================================================== -->
-  <!-- SECTION 1: BOAT TELEMETRY (SHOWN FIRST AT THE TOP)             -->
+  <!-- SECTION 1: BOAT TELEMETRY (FLIGHT CONTROLLER POINT & WAVE CREST)-->
   <!-- ============================================================== -->
   <section class="telemetry-section" id="section-boat">
     <div class="section-header">
@@ -84,12 +84,60 @@
       <div class="section-subtitle">MAVLink Flight Controller (Tailscale HTTP)</div>
     </div>
 
-    <!-- Hydrodynamic Speed-Animated Crest Visualizer -->
-    <div class="water-box" aria-label="Animated water crest showing boat motion">
-      <div class="live-tag">LIVE FC SPEED & CREST WAVE GRAPHIC</div>
-      <svg class="waves" viewBox="0 0 1000 260" preserveAspectRatio="none" aria-hidden="true">
+    <!-- Hydrodynamic Speed-Animated Crest Visualizer centered at Flight Controller Node -->
+    <div class="water-box" aria-label="Animated water crest originating from Flight Controller point on boat hull">
+      <div class="live-tag">LIVE FC HULL NODE & CREST WAVE GRAPHIC</div>
+
+      <svg class="waves" viewBox="0 0 1000 260" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <defs>
+          <linearGradient id="fc-hull-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#046b8c" />
+            <stop offset="50%" stop-color="#43c5db" />
+            <stop offset="100%" stop-color="#83e8ff" />
+          </linearGradient>
+          <radialGradient id="fc-glow-grad" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#83e8ff" stop-opacity="0.9" />
+            <stop offset="60%" stop-color="#43c5db" stop-opacity="0.4" />
+            <stop offset="100%" stop-color="#092b45" stop-opacity="0" />
+          </radialGradient>
+        </defs>
+
+        <!-- FC Hydrodynamic Wave Crests (Originating at FC Hull Location x=500) -->
         <path id="wave-back" fill="#0d8bb0" opacity=".62"></path>
         <path id="wave-front" fill="#43c5db" opacity=".78"></path>
+
+        <!-- FC Center Hull Floating Graphic -->
+        <g id="fc-boat-hull-group" transform="translate(500, 130)">
+          <!-- Sleek Racing Boat Hull Outline -->
+          <path d="M -240 5 Q 0 24 240 5 Q 0 12 -240 5 Z" fill="url(#fc-hull-grad)" stroke="#ffffff" stroke-width="1.5" />
+          
+          <!-- Water Line Reference -->
+          <line x1="-260" y1="5" x2="260" y2="5" stroke="rgba(131, 232, 255, 0.4)" stroke-dasharray="6 3" stroke-width="1" />
+
+          <!-- FLIGHT CONTROLLER SENSOR NODE (Situated directly at center hull) -->
+          <g id="fc-node" transform="translate(0, 0)">
+            <!-- Radial Pulse Ring (Expands with FC Speed) -->
+            <circle id="fc-pulse" cx="0" cy="0" r="16" fill="url(#fc-glow-grad)" opacity="0.8" />
+            <circle cx="0" cy="0" r="18" fill="none" stroke="#83e8ff" stroke-width="1.5" opacity="0.6" />
+            
+            <!-- Sensor Chip Icon -->
+            <rect x="-8" y="-8" width="16" height="16" rx="3" fill="#030d17" stroke="#9beec3" stroke-width="2" />
+            <circle cx="0" cy="0" r="3" fill="#9beec3" />
+
+            <!-- Sensor Node Marker Line -->
+            <line x1="0" y1="-8" x2="0" y2="-24" stroke="#83e8ff" stroke-width="1.5" stroke-dasharray="2 2" />
+
+            <!-- Sensor Badge Label -->
+            <g transform="translate(0, -32)">
+              <rect x="-65" y="-12" width="130" height="20" rx="4" fill="rgba(3, 13, 23, 0.9)" stroke="#43c5db" stroke-width="1" />
+              <text x="0" y="2" text-anchor="middle" fill="#83e8ff" font-size="9" font-weight="800" letter-spacing="0.05em">📍 FC SENSOR NODE</text>
+            </g>
+          </g>
+
+          <!-- FC Bow Spray / Hydrodynamic Crest Ripples at Node -->
+          <circle id="fc-ripple-1" cx="0" cy="5" r="12" fill="none" stroke="#83e8ff" stroke-width="1.5" opacity="0.8" />
+          <circle id="fc-ripple-2" cx="0" cy="5" r="28" fill="none" stroke="#43c5db" stroke-width="1.0" opacity="0.5" />
+        </g>
       </svg>
     </div>
 
@@ -276,18 +324,36 @@
 
     (() => {
       const $ = id => document.getElementById(id);
-      let telemetry = { speed_kmh: 0, yaw_stability_10s_dps: 0 };
+      let telemetry = { speed_kmh: 0, yaw_stability_10s_dps: 0, pitch_deg: 0, roll_deg: 0 };
       let phase = 0;
 
       const format = (val, unit = '', dec = 1) => val == null ? '—' : `${Number(val).toFixed(dec)}${unit}`;
 
-      const wave = (phaseVal, amplitude, baseline) => {
-        let path = `M0 ${baseline}`;
-        for (let x = 0; x <= 1000; x += 20) {
-          const y = baseline + Math.sin((x / 1000) * Math.PI * 4 + phaseVal) * amplitude + Math.sin((x / 1000) * Math.PI * 8 + phaseVal * 1.7) * amplitude * .28;
-          path += ` L${x} ${y.toFixed(1)}`;
+      // Hydrodynamic Wave Generator originating directly at FC point on the hull (x=500)
+      const fcWave = (phaseVal, amplitude, baseline, freqMultiplier) => {
+        const xFC = 500;
+        const boatSpeed = Number(telemetry.speed_kmh || 0);
+        const pitchVal = Number(telemetry.pitch_deg || 0);
+        
+        // Spread radius expands outward from FC location as boat speed increases
+        const spread = 220 + (boatSpeed * 18);
+        
+        let path = `M 0 260 L 0 ${baseline}`;
+        for (let x = 0; x <= 1000; x += 15) {
+          const dist = Math.abs(x - xFC);
+          // Gaussian attenuation centered at FC point (x=500)
+          const attenuation = Math.exp(- (dist * dist) / (2 * spread * spread));
+          
+          // Wave crest calculation originating at FC point
+          const waveSin = Math.sin((dist / (30.0 * freqMultiplier)) - phaseVal) * amplitude * attenuation;
+          
+          // Pitch tilt offset across hull length
+          const tiltOffset = (x - xFC) * Math.sin((pitchVal * Math.PI) / 180.0) * 0.8;
+          
+          const y = baseline + waveSin + tiltOffset;
+          path += ` L ${x.toFixed(1)} ${y.toFixed(1)}`;
         }
-        return `${path} L1000 260 L0 260 Z`;
+        return `${path} L 1000 260 Z`;
       };
 
       let paddleData = { 
@@ -304,16 +370,40 @@
         const boatSpeed = Number(telemetry.speed_kmh || 0);
         const yawStab = Number(telemetry.yaw_stability_10s_dps || 0);
 
-        // 1. BOAT TELEMETRY WATER CREST ANIMATION:
-        const energy = Math.min(42, 8 + boatSpeed * 2.8 + yawStab * 6);
-        phase += 0.015 + (boatSpeed * 0.012);
+        // 1. FC POINT & BOAT TELEMETRY WATER CREST ANIMATION:
+        const energy = Math.min(48, 6 + boatSpeed * 3.5 + yawStab * 5);
+        phase += 0.015 + (boatSpeed * 0.015);
         
-        $('wave-back').setAttribute('d', wave(phase * 0.7, energy * 0.68, 165));
-        $('wave-front').setAttribute('d', wave(phase, energy, 184));
+        // Wave crests originate at FC point on the hull (x=500)
+        $('wave-back').setAttribute('d', fcWave(phase * 0.8, energy * 0.7, 168, 1.2));
+        $('wave-front').setAttribute('d', fcWave(phase, energy, 185, 1.0));
 
-        const spray = $('bow-spray');
-        if (spray) {
-          spray.setAttribute('opacity', Math.min(1.0, 0.2 + (boatSpeed / 6.0)).toFixed(2));
+        // Animate FC Hull Node tilt based on live Roll & Pitch telemetry from FC
+        const hullGroup = $('fc-boat-hull-group');
+        if (hullGroup) {
+          const pitch = Number(telemetry.pitch_deg || 0);
+          const roll = Number(telemetry.roll_deg || 0);
+          hullGroup.setAttribute('transform', `translate(500, ${130 + (roll * 0.8)}) rotate(${(-pitch).toFixed(1)})`);
+        }
+
+        // FC Ripple expansion from FC Node
+        const pulse = $('fc-pulse');
+        if (pulse) {
+          const rScale = 14 + (Math.sin(phase * 3.0) * (4 + boatSpeed * 1.5));
+          pulse.setAttribute('r', rScale.toFixed(1));
+        }
+
+        const r1 = $('fc-ripple-1');
+        const r2 = $('fc-ripple-2');
+        if (r1) {
+          const r1Scale = (10 + ((phase * 25) % 40));
+          r1.setAttribute('r', r1Scale.toFixed(1));
+          r1.setAttribute('opacity', Math.max(0, 1.0 - (r1Scale / 40.0)).toFixed(2));
+        }
+        if (r2) {
+          const r2Scale = (20 + ((phase * 25 + 20) % 50));
+          r2.setAttribute('r', r2Scale.toFixed(1));
+          r2.setAttribute('opacity', Math.max(0, 0.7 - (r2Scale / 50.0)).toFixed(2));
         }
 
         // 2. PADDLE ROTATING ANIMATION:
