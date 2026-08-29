@@ -36,6 +36,18 @@ def calculate_paddler_sync(spm1: float, spm2: float, accel1: float, accel2: floa
     return sync_pct, round(spm_diff, 1)
 
 
+def detect_paddling_side(roll_deg: float, prev_side: str) -> tuple[str, bool]:
+    """Detect whether paddler is driving on STARBOARD (RIGHT) or PORT (LEFT) side based on IMU roll trim."""
+    new_side = prev_side
+    if roll_deg > 3.5:
+        new_side = "STARBOARD"
+    elif roll_deg < -3.5:
+        new_side = "PORT"
+    
+    switch_event = (prev_side != "UNKNOWN" and new_side != prev_side)
+    return new_side, switch_event
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--url1", default="http://192.168.11.219/", help="HTTP endpoint for Paddler 1 hardware")
@@ -56,11 +68,13 @@ def main() -> None:
     last_stroke_1 = time.time()
     history_1 = []
     in_stroke_1 = False
+    paddler_1_side = "STARBOARD"
 
     # Paddler 2 tracking
     last_stroke_2 = time.time()
     history_2 = []
     in_stroke_2 = False
+    paddler_2_side = "PORT"
 
     with output.open("a", encoding="utf-8") as log:
         while args.seconds == 0 or (time.monotonic() - started) < args.seconds:
@@ -80,14 +94,14 @@ def main() -> None:
                     "event": "dual_paddle_telemetry",
                     "stroke_rate_spm": avg_spm,
                     "peak_accel_g": accel1,
-                    "paddler_1": {"paddle_id": 1, "device_name": "PADDLER-1", "spm": spm1, "accel_g": accel1, "roll_deg": round(random.uniform(-4, 4), 1)},
-                    "paddler_2": {"paddle_id": 2, "device_name": "PADDLER-2", "spm": spm2, "accel_g": accel2, "roll_deg": round(random.uniform(-4, 4), 1)},
+                    "paddler_1": {"paddle_id": 1, "device_name": "PADDLER-1", "spm": spm1, "accel_g": accel1, "roll_deg": 4.2, "side": "STARBOARD", "side_switch_event": False},
+                    "paddler_2": {"paddle_id": 2, "device_name": "PADDLER-2", "spm": spm2, "accel_g": accel2, "roll_deg": -4.1, "side": "PORT", "side_switch_event": False},
                     "sync_percentage": sync_pct,
                     "spm_delta": spm_delta,
                 }
                 log.write(json.dumps(record) + "\n")
                 log.flush()
-                print(f"[DUAL PADDLE SIM] Sync: {sync_pct}% | Avg SPM: {avg_spm} | P1: {spm1} SPM, P2: {spm2} SPM")
+                print(f"[DUAL PADDLE SIM] Sync: {sync_pct}% | Avg SPM: {avg_spm} | P1: {spm1} SPM (STARBOARD), P2: {spm2} SPM (PORT)")
             else:
                 now_t = time.time()
                 data1 = fetch_http_paddle(args.url1)
@@ -114,7 +128,10 @@ def main() -> None:
                     pitch1 = round(orient1.get("pitch", 0.0), 2)
                     temp1 = round(data1.get("temp_c", 0.0), 1)
                 else:
-                    spm1, accel1, roll1, pitch1, temp1 = 30.0, 1.05, 0.0, 0.0, 28.0
+                    spm1, accel1, roll1, pitch1, temp1 = 30.0, 1.05, 4.5, 0.0, 28.0
+
+                # Detect Paddling Side for Paddler 1
+                paddler_1_side, side_switch_1 = detect_paddling_side(roll1, paddler_1_side)
 
                 # Process Paddler 2 (Physical Hardware at url2 or mirrored simulation)
                 if data2:
@@ -137,12 +154,15 @@ def main() -> None:
                     pitch2 = round(orient2.get("pitch", 0.0), 2)
                     temp2 = round(data2.get("temp_c", 0.0), 1)
                 else:
-                    # When Paddler 2 hardware is offline, mirror Paddler 1 with minor natural cadence variation
+                    # When Paddler 2 hardware is offline, mirror Paddler 1 with natural variation
                     spm2 = round(spm1 + (math.sin(now_t * 0.4) * 1.8), 1)
                     accel2 = round(accel1 + (math.cos(now_t * 0.5) * 0.08), 2)
-                    roll2 = round(roll1 * -0.8, 2)
+                    roll2 = round(roll1 * -0.9, 2)
                     pitch2 = pitch1
                     temp2 = temp1
+
+                # Detect Paddling Side for Paddler 2
+                paddler_2_side, side_switch_2 = detect_paddling_side(roll2, paddler_2_side)
 
                 sync_pct, spm_delta = calculate_paddler_sync(spm1, spm2, accel1, accel2)
                 avg_spm = round((spm1 + spm2) / 2.0, 1)
@@ -155,6 +175,7 @@ def main() -> None:
                     "peak_accel_g": round(accel1, 3),
                     "sync_percentage": sync_pct,
                     "spm_delta": spm_delta,
+                    "side_switch_active": (side_switch_1 or side_switch_2),
                     "paddler_1": {
                         "paddle_id": 1,
                         "device_name": data1.get("device_name", "PADDLER-1") if data1 else "PADDLER-1",
@@ -163,6 +184,8 @@ def main() -> None:
                         "accel_g": round(accel1, 3),
                         "roll_deg": roll1,
                         "pitch_deg": pitch1,
+                        "side": paddler_1_side,
+                        "side_switch_event": side_switch_1,
                         "temp_c": temp1,
                         "status": "connected" if data1 else "simulated",
                     },
@@ -174,6 +197,8 @@ def main() -> None:
                         "accel_g": round(accel2, 3),
                         "roll_deg": roll2,
                         "pitch_deg": pitch2,
+                        "side": paddler_2_side,
+                        "side_switch_event": side_switch_2,
                         "temp_c": temp2,
                         "status": "connected" if data2 else "simulated",
                     }

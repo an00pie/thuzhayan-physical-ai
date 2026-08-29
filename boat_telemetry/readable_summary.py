@@ -60,6 +60,9 @@ def print_formatted_summary(boat: dict | None, paddle: dict | None, compact: boo
     spm1 = p1.get("spm", spm)
     spm2 = p2.get("spm", spm)
     accel2 = p2.get("accel_g", accel1)
+    side1 = p1.get("side", "STARBOARD")
+    side2 = p2.get("side", "PORT")
+    side_switch = paddle.get("side_switch_active") or p1.get("side_switch_event") or p2.get("side_switch_event")
 
     # Distance per stroke
     if spm > 0 and speed_kmh > 0:
@@ -69,18 +72,19 @@ def print_formatted_summary(boat: dict | None, paddle: dict | None, compact: boo
 
     if compact:
         alert_str = "🚨 ALERT!" if gpio_alert else "✅ OK"
+        switch_str = " | 🔄 SIDE SWITCH!" if side_switch else ""
         print(
             f"[{time.strftime('%H:%M:%S')}] "
             f"Speed: {speed_kmh:.1f} km/h ({split_500m}) | "
             f"DPS: {dps_m:.2f}m | Drift: {drift:+.1f}° | "
-            f"Sync: {sync_pct:.1f}% (P1: {spm1} SPM, P2: {spm2} SPM) | "
+            f"Sync: {sync_pct:.1f}% (P1: {spm1} SPM {side1[0]}, P2: {spm2} SPM {side2[0]}){switch_str} | "
             f"GPIO Pin 17: {alert_str}"
         )
         return
 
     print("[ignoring loop detection]")
     print("=" * 72)
-    print("🚣 THUZHAYAN PHYSICAL AI TELEMETRY SUMMARY & CREW SYNCHRONIZATION")
+    print("ROWING THUZHAYAN PHYSICAL AI TELEMETRY SUMMARY & CREW SYNCHRONIZATION")
     print("=" * 72)
     print(f"🚀 BOAT VELOCITY & PACING:")
     print(f"   ├─ Forward Speed : {speed_kmh:.2f} km/h  ({speed_knots:.2f} knots)")
@@ -93,11 +97,12 @@ def print_formatted_summary(boat: dict | None, paddle: dict | None, compact: boo
     print(f"   ├─ Hull Stability: {yaw_stab:.2f} °/s (Yaw Oscillation)")
     print(f"   └─ Trim Roll/Pitch: Roll {roll:+.1f}° | Pitch {pitch:+.1f}°")
     print("")
-    print(f"👥 DUAL-PADDLER SYNCHRONIZATION:")
+    print(f"👥 DUAL-PADDLER SYNCHRONIZATION & PADDLE SIDE:")
     print(f"   ├─ Crew Sync Score: {sync_pct:.1f}% {'(In-Phase Drive 🟢)' if sync_pct >= 85 else '(Cadence Mismatch 🟡)'}")
-    print(f"   ├─ Paddler 1 (Bow): {spm1:.1f} SPM  (Peak Accel: {accel1:.2f}g)")
-    print(f"   ├─ Paddler 2 (Stern): {spm2:.1f} SPM  (Peak Accel: {accel2:.2f}g)")
-    print(f"   └─ Cadence Delta : {abs(spm1 - spm2):.1f} SPM difference")
+    print(f"   ├─ Paddler 1 (Bow): {spm1:.1f} SPM  [{side1}]  (Peak Accel: {accel1:.2f}g)")
+    print(f"   ├─ Paddler 2 (Stern): {spm2:.1f} SPM  [{side2}]  (Peak Accel: {accel2:.2f}g)")
+    print(f"   ├─ Cadence Delta : {abs(spm1 - spm2):.1f} SPM difference")
+    print(f"   └─ Side Switch Event: {'🔄 ACTIVE SWITCH DETECTED' if side_switch else 'None'}")
     print("")
     print(f"🍓 RASPBERRY PI 5 HARDWARE SAFETY:")
     print(f"   └─ GPIO Pin 17 Alert: {'🚨 TRIGGERED (Instability > 5°/s)' if gpio_alert else '✅ NORMAL (Nominal)'}")
