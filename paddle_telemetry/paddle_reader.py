@@ -94,14 +94,28 @@ def main() -> None:
     with output.open("a", encoding="utf-8") as log:
         while args.seconds == 0 or (time.monotonic() - started) < args.seconds:
             if args.simulate:
-                time.sleep(1.5)
-                now_ms = int(time.time() * 1000)
-                spm1 = round(random.uniform(31.5, 34.0), 1)
-                spm2 = round(spm1 + random.uniform(-2.5, 2.5), 1)
-                accel1 = round(random.uniform(1.4, 2.2), 2)
-                accel2 = round(accel1 + random.uniform(-0.3, 0.3), 2)
+                time.sleep(1.0)
+                now_t = time.time()
+                now_ms = int(now_t * 1000)
+
+                # Simulate dynamic crew sync variations (cycling Green -> Yellow -> Red -> Green)
+                cycle_phase = (now_t * 0.25) % (Math.pi * 2) if 'Math' in globals() else (now_t * 0.25) % (math.pi * 2)
+                cadence_gap = math.sin(cycle_phase) * 3.2
+
+                spm1 = round(32.0 + (math.cos(now_t * 0.4) * 2.0), 1)
+                spm2 = round(spm1 + cadence_gap, 1)
+                accel1 = round(1.6 + (math.sin(now_t * 0.5) * 0.4), 2)
+                accel2 = round(accel1 - (cadence_gap * 0.1), 2)
+
+                # Simulate occasional side switches
+                sim_roll1 = 4.5 if int(now_t / 12) % 2 == 0 else -4.5
+                sim_roll2 = -4.2 if int(now_t / 12) % 2 == 0 else 4.2
+
+                paddler_1_side, side_switch_1 = detect_paddling_side(sim_roll1, paddler_1_side)
+                paddler_2_side, side_switch_2 = detect_paddling_side(sim_roll2, paddler_2_side)
 
                 sync_pct, spm_delta = calculate_paddler_sync(spm1, spm2, accel1, accel2)
+                light_status, light_hex, light_label = get_sync_light_status(sync_pct)
                 avg_spm = round((spm1 + spm2) / 2.0, 1)
 
                 record = {
@@ -109,14 +123,46 @@ def main() -> None:
                     "event": "dual_paddle_telemetry",
                     "stroke_rate_spm": avg_spm,
                     "peak_accel_g": accel1,
-                    "paddler_1": {"paddle_id": 1, "device_name": "PADDLER-1", "spm": spm1, "accel_g": accel1, "roll_deg": 4.2, "side": "STARBOARD", "side_switch_event": False},
-                    "paddler_2": {"paddle_id": 2, "device_name": "PADDLER-2", "spm": spm2, "accel_g": accel2, "roll_deg": -4.1, "side": "PORT", "side_switch_event": False},
                     "sync_percentage": sync_pct,
+                    "sync_light_status": light_status,
+                    "sync_light_color": light_hex,
+                    "sync_light_label": light_label,
                     "spm_delta": spm_delta,
+                    "side_switch_active": (side_switch_1 or side_switch_2),
+                    "paddler_1": {
+                        "paddle_id": 1,
+                        "device_name": "PADDLER-1",
+                        "ip": "192.168.11.219",
+                        "spm": spm1,
+                        "accel_g": accel1,
+                        "roll_deg": sim_roll1,
+                        "pitch_deg": 0.5,
+                        "side": paddler_1_side,
+                        "side_switch_event": side_switch_1,
+                        "temp_c": 30.5,
+                        "status": "simulated"
+                    },
+                    "paddler_2": {
+                        "paddle_id": 2,
+                        "device_name": "PADDLER-2",
+                        "ip": "192.168.11.220",
+                        "spm": spm2,
+                        "accel_g": accel2,
+                        "roll_deg": sim_roll2,
+                        "pitch_deg": -0.2,
+                        "side": paddler_2_side,
+                        "side_switch_event": side_switch_2,
+                        "temp_c": 30.2,
+                        "status": "simulated"
+                    },
                 }
                 log.write(json.dumps(record) + "\n")
                 log.flush()
-                print(f"[DUAL PADDLE SIM] Sync: {sync_pct}% | Avg SPM: {avg_spm} | P1: {spm1} SPM (STARBOARD), P2: {spm2} SPM (PORT)")
+                light_emoji = "🟢" if light_status == "GREEN" else ("🟡" if light_status == "YELLOW" else "🔴")
+                print(
+                    f"[PADDLE SIM] {light_emoji} Light: {light_status} ({sync_pct}%) | Avg SPM: {avg_spm} | "
+                    f"P1: {spm1} SPM [{paddler_1_side}] | P2: {spm2} SPM [{paddler_2_side}]"
+                )
             else:
                 now_t = time.time()
                 data1 = fetch_http_paddle(args.url1)
