@@ -406,11 +406,11 @@
       };
 
       let paddleData = { 
-        stroke_rate_spm: 30.0, 
-        sync_percentage: 95.0, 
-        peak_accel_g: 1.05,
-        paddler_1: { side: "STARBOARD", accel_g: 1.05 },
-        paddler_2: { side: "PORT", accel_g: 1.05 }
+        stroke_rate_spm: 0.0, 
+        sync_percentage: 100.0, 
+        peak_accel_g: 1.0,
+        paddler_1: { side: "STARBOARD", accel_g: 1.0, spm: 0.0 },
+        paddler_2: { side: "PORT", accel_g: 1.0, spm: 0.0 }
       };
       let strokePhase1 = 0;
       let strokePhase2 = 0;
@@ -461,29 +461,45 @@
           r2.setAttribute('opacity', Math.max(0, 0.7 - (r2Scale / 50.0)).toFixed(2));
         }
 
-        // 2. PADDLE ROTATING ANIMATION:
-        const spm = Math.max(10, Number(paddleData.stroke_rate_spm || 30.0));
-        const accelG1 = Number(paddleData.paddler_1?.accel_g || paddleData.peak_accel_g || 1.05);
-        const accelG2 = Number(paddleData.paddler_2?.accel_g || paddleData.peak_accel_g || 1.05);
-        const syncPct = Number(paddleData.sync_percentage || 95.0);
+        // 2. REALISTIC PADDLE ROTATING & BODY LEAN ANIMATION:
+        const spm = Number(paddleData.stroke_rate_spm || 0.0);
+        const spm1 = Number(paddleData.paddler_1?.spm ?? spm);
+        const spm2 = Number(paddleData.paddler_2?.spm ?? spm);
+        const accelG1 = Number(paddleData.paddler_1?.accel_g || paddleData.peak_accel_g || 1.0);
+        const accelG2 = Number(paddleData.paddler_2?.accel_g || paddleData.peak_accel_g || 1.0);
+        const syncPct = Number(paddleData.sync_percentage || 100.0);
 
-        const strokeSpeed1 = (spm / 60.0) * (0.08 + (accelG1 * 0.045));
-        strokePhase1 += strokeSpeed1;
+        let angle1 = 0;
+        let angle2 = 0;
 
-        const phaseLag = (100.0 - syncPct) * 0.035;
-        strokePhase2 = strokePhase1 - phaseLag;
+        if (spm > 2.0 || spm1 > 2.0 || spm2 > 2.0) {
+          // Active paddling: advance stroke phase based on real SPM rate
+          const strokeSpeed1 = (Math.max(spm1, spm) / 60.0) * 0.06;
+          strokePhase1 += strokeSpeed1;
 
-        const sweepAmp1 = Math.min(32, 16 + (accelG1 * 6.5));
-        const sweepAmp2 = Math.min(32, 16 + (accelG2 * 6.5));
+          const phaseLag = (100.0 - syncPct) * 0.035;
+          strokePhase2 = strokePhase1 - phaseLag;
 
-        const angle1 = Math.sin(strokePhase1 * Math.PI * 2) * sweepAmp1;
-        const angle2 = Math.sin(strokePhase2 * Math.PI * 2) * sweepAmp2;
+          const sweepAmp1 = Math.min(30, 14 + (accelG1 * 6.0));
+          const sweepAmp2 = Math.min(30, 14 + (accelG2 * 6.0));
+
+          angle1 = Math.sin(strokePhase1 * Math.PI * 2) * sweepAmp1;
+          angle2 = Math.sin(strokePhase2 * Math.PI * 2) * sweepAmp2;
+        } else {
+          // Idle state: ease oar angles smoothly to resting position (0°)
+          strokePhase1 = 0;
+          strokePhase2 = 0;
+          angle1 = 0;
+          angle2 = 0;
+        }
 
         const side1 = paddleData.paddler_1?.side || "STARBOARD";
         const side2 = paddleData.paddler_2?.side || "PORT";
 
         const oar1 = $('oar-group-1');
         const oar2 = $('oar-group-2');
+        const p1Group = $('paddler-1');
+        const p2Group = $('paddler-2');
 
         if (oar1) {
           const dir1 = (side1 === "PORT") ? -1 : 1;
@@ -494,10 +510,27 @@
           oar2.setAttribute('transform', `translate(4, 12) rotate(${(angle2 * dir2).toFixed(1)})`);
         }
 
+        // Dynamic paddler torso lean (Forward on catch, backward on drive)
+        if (p1Group) {
+          const lean1 = (spm > 2.0 || spm1 > 2.0) ? (Math.sin(strokePhase1 * Math.PI * 2) * 7.5) : 0;
+          p1Group.setAttribute('transform', `translate(343, 55) rotate(${lean1.toFixed(1)})`);
+        }
+        if (p2Group) {
+          const lean2 = (spm > 2.0 || spm2 > 2.0) ? (Math.sin(strokePhase2 * Math.PI * 2) * 7.5) : 0;
+          p2Group.setAttribute('transform', `translate(163, 58) rotate(${lean2.toFixed(1)})`);
+        }
+
+        // Water splash flare opacity — only visible during drive phase when active
         const splash1 = $('splash-1');
         const splash2 = $('splash-2');
-        if (splash1) splash1.setAttribute('opacity', Math.abs(angle1) > 10 ? (Math.abs(angle1) - 10) / 14 : 0);
-        if (splash2) splash2.setAttribute('opacity', Math.abs(angle2) > 10 ? (Math.abs(angle2) - 10) / 14 : 0);
+        if (splash1) {
+          const isDrive1 = (spm > 2.0 || spm1 > 2.0) && (Math.sin(strokePhase1 * Math.PI * 2) > 0.2);
+          splash1.setAttribute('opacity', isDrive1 ? Math.min(1.0, 0.4 + (accelG1 - 1.0) * 1.5).toFixed(2) : '0');
+        }
+        if (splash2) {
+          const isDrive2 = (spm > 2.0 || spm2 > 2.0) && (Math.sin(strokePhase2 * Math.PI * 2) > 0.2);
+          splash2.setAttribute('opacity', isDrive2 ? Math.min(1.0, 0.4 + (accelG2 - 1.0) * 1.5).toFixed(2) : '0');
+        }
 
         requestAnimationFrame(animate);
       };
