@@ -113,37 +113,44 @@ class PaddlerTracker:
         orient = data.get("orientation_deg", {})
         gyro_x_raw = gyro.get("x", 0.0)
 
-        # 1. Zero-bias Gyro Calibration (when resting)
-        if abs(accel_mag - 1.0) < 0.12 and abs(gyro.get("y", 0.0)) < 15 and abs(gyro.get("z", 0.0)) < 15:
-            if self.bias_samples < 50:
+        # 1. Zero-bias Gyro Calibration (when resting still)
+        gyro_y_raw = gyro.get("y", 0.0)
+        gyro_z_raw = gyro.get("z", 0.0)
+
+        # Baseline offset tracking
+        if abs(accel_mag - 1.0) < 0.08 and abs(gyro_y_raw) < 10.0 and abs(gyro_z_raw) < 10.0:
+            if self.bias_samples < 40:
                 self.gyro_bias_x = (self.gyro_bias_x * self.bias_samples + gyro_x_raw) / (self.bias_samples + 1)
                 self.bias_samples += 1
             else:
-                self.gyro_bias_x = 0.98 * self.gyro_bias_x + 0.02 * gyro_x_raw
+                self.gyro_bias_x = 0.95 * self.gyro_bias_x + 0.05 * gyro_x_raw
 
         dynamic_gyro_x = abs(gyro_x_raw - self.gyro_bias_x)
+        dynamic_gyro_y = abs(gyro_y_raw)
+        dynamic_gyro_z = abs(gyro_z_raw)
+        dynamic_gyro_max = max(dynamic_gyro_x, dynamic_gyro_y, dynamic_gyro_z)
         dynamic_accel = abs(accel_mag - 1.0)
 
-        # 2. Dynamic Stroke Peak Detection
-        # A rowing stroke drive triggers when dynamic acceleration or dynamic angular rotation spikes
-        if dynamic_accel > 0.28 or dynamic_gyro_x > 25.0:
-            if not self.in_stroke and (now_t - self.last_stroke_time) > 0.8:
+        # 2. Responsive Dynamic Stroke Peak Detection
+        # Triggers stroke event when motion exceeds gentle threshold
+        if dynamic_accel > 0.07 or dynamic_gyro_max > 12.0:
+            if not self.in_stroke and (now_t - self.last_stroke_time) > 0.7:
                 if self.last_stroke_time > 0:
                     dt = now_t - self.last_stroke_time
                     inst_spm = round(60.0 / dt, 1)
-                    if 12.0 <= inst_spm <= 60.0:
+                    if 10.0 <= inst_spm <= 75.0:
                         self.history.append(inst_spm)
                         if len(self.history) > 4:
                             self.history.pop(0)
                 self.last_stroke_time = now_t
                 self.in_stroke = True
         else:
-            if dynamic_accel < 0.15 and dynamic_gyro_x < 15.0:
+            if dynamic_accel < 0.04 and dynamic_gyro_max < 8.0:
                 self.in_stroke = False
 
-        # 3. Idle timeout (reset to 0.0 SPM if stationary > 3.2 seconds)
+        # 3. Idle timeout (reset to 0.0 SPM if stationary > 3.5 seconds)
         time_since_stroke = now_t - self.last_stroke_time if self.last_stroke_time > 0 else 999.0
-        if time_since_stroke > 3.2:
+        if time_since_stroke > 3.5:
             spm = 0.0
             self.history.clear()
         else:
