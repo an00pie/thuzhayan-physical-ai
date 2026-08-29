@@ -144,9 +144,6 @@ class PaddlerTracker:
                         self.history.append(inst_spm)
                         if len(self.history) > 4:
                             self.history.pop(0)
-                else:
-                    # First detected stroke: seed initial motion cadence
-                    self.history = [26.0]
 
                 self.last_stroke_time = now_t
                 self.drive_start_time = now_t

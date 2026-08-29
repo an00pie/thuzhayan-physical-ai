@@ -461,35 +461,34 @@
           r2.setAttribute('opacity', Math.max(0, 0.7 - (r2Scale / 50.0)).toFixed(2));
         }
 
-        // 2. REALISTIC PADDLE ROTATING & BODY LEAN ANIMATION:
-        const spm = Number(paddleData.stroke_rate_spm || 0.0);
-        const spm1 = Number(paddleData.paddler_1?.spm ?? spm);
-        const spm2 = Number(paddleData.paddler_2?.spm ?? spm);
-        const accelG1 = Number(paddleData.paddler_1?.accel_g || paddleData.peak_accel_g || 1.0);
-        const accelG2 = Number(paddleData.paddler_2?.accel_g || paddleData.peak_accel_g || 1.0);
-        const syncPct = Number(paddleData.sync_percentage || 100.0);
+        // 2. INDEPENDENT PADDLE ROTATING & BODY LEAN ANIMATION:
+        const spm1 = Number(paddleData.paddler_1?.spm || 0.0);
+        const spm2 = Number(paddleData.paddler_2?.spm || 0.0);
+        const accelG1 = Number(paddleData.paddler_1?.accel_g || 1.0);
+        const accelG2 = Number(paddleData.paddler_2?.accel_g || 1.0);
 
         let angle1 = 0;
         let angle2 = 0;
 
-        if (spm > 2.0 || spm1 > 2.0 || spm2 > 2.0) {
-          // Active paddling: advance stroke phase based on real SPM rate
-          const strokeSpeed1 = (Math.max(spm1, spm) / 60.0) * 0.06;
+        // Paddler 1 Independent Phase Animation
+        if (spm1 > 2.0) {
+          const strokeSpeed1 = (spm1 / 60.0) * 0.06;
           strokePhase1 += strokeSpeed1;
-
-          const phaseLag = (100.0 - syncPct) * 0.035;
-          strokePhase2 = strokePhase1 - phaseLag;
-
           const sweepAmp1 = Math.min(30, 14 + (accelG1 * 6.0));
-          const sweepAmp2 = Math.min(30, 14 + (accelG2 * 6.0));
-
           angle1 = Math.sin(strokePhase1 * Math.PI * 2) * sweepAmp1;
+        } else {
+          strokePhase1 = 0;
+          angle1 = 0;
+        }
+
+        // Paddler 2 Independent Phase Animation
+        if (spm2 > 2.0) {
+          const strokeSpeed2 = (spm2 / 60.0) * 0.06;
+          strokePhase2 += strokeSpeed2;
+          const sweepAmp2 = Math.min(30, 14 + (accelG2 * 6.0));
           angle2 = Math.sin(strokePhase2 * Math.PI * 2) * sweepAmp2;
         } else {
-          // Idle state: ease oar angles smoothly to resting position (0°)
-          strokePhase1 = 0;
           strokePhase2 = 0;
-          angle1 = 0;
           angle2 = 0;
         }
 
@@ -510,25 +509,25 @@
           oar2.setAttribute('transform', `translate(4, 12) rotate(${(angle2 * dir2).toFixed(1)})`);
         }
 
-        // Dynamic paddler torso lean (Forward on catch, backward on drive)
+        // Dynamic paddler torso lean (independent for P1 and P2)
         if (p1Group) {
-          const lean1 = (spm > 2.0 || spm1 > 2.0) ? (Math.sin(strokePhase1 * Math.PI * 2) * 7.5) : 0;
+          const lean1 = (spm1 > 2.0) ? (Math.sin(strokePhase1 * Math.PI * 2) * 7.5) : 0;
           p1Group.setAttribute('transform', `translate(343, 55) rotate(${lean1.toFixed(1)})`);
         }
         if (p2Group) {
-          const lean2 = (spm > 2.0 || spm2 > 2.0) ? (Math.sin(strokePhase2 * Math.PI * 2) * 7.5) : 0;
+          const lean2 = (spm2 > 2.0) ? (Math.sin(strokePhase2 * Math.PI * 2) * 7.5) : 0;
           p2Group.setAttribute('transform', `translate(163, 58) rotate(${lean2.toFixed(1)})`);
         }
 
-        // Water splash flare opacity — only visible during drive phase when active
+        // Water splash flare opacity — independent for P1 and P2
         const splash1 = $('splash-1');
         const splash2 = $('splash-2');
         if (splash1) {
-          const isDrive1 = (spm > 2.0 || spm1 > 2.0) && (Math.sin(strokePhase1 * Math.PI * 2) > 0.2);
+          const isDrive1 = (spm1 > 2.0) && (Math.sin(strokePhase1 * Math.PI * 2) > 0.2);
           splash1.setAttribute('opacity', isDrive1 ? Math.min(1.0, 0.4 + (accelG1 - 1.0) * 1.5).toFixed(2) : '0');
         }
         if (splash2) {
-          const isDrive2 = (spm > 2.0 || spm2 > 2.0) && (Math.sin(strokePhase2 * Math.PI * 2) > 0.2);
+          const isDrive2 = (spm2 > 2.0) && (Math.sin(strokePhase2 * Math.PI * 2) > 0.2);
           splash2.setAttribute('opacity', isDrive2 ? Math.min(1.0, 0.4 + (accelG2 - 1.0) * 1.5).toFixed(2) : '0');
         }
 
