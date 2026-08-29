@@ -28,7 +28,7 @@
     .section-subtitle { font-size: 0.78rem; color: #82a8bc; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
     
     /* ANIMATIONS & VISUALIZERS */
-    .water-box { position: relative; height: 180px; overflow: hidden; border: 1px solid #23516d; border-radius: 12px; background: linear-gradient(#092b45 0%, #073a59 72%, #046b8c 100%); margin-bottom: 16px; }
+    .water-box { position: relative; height: 190px; overflow: hidden; border: 1px solid #23516d; border-radius: 12px; background: linear-gradient(#092b45 0%, #073a59 72%, #046b8c 100%); margin-bottom: 16px; }
     .water-box svg.waves { position: absolute; inset: 0; width: 100%; height: 100%; }
     .live-tag { position: absolute; z-index: 3; left: 16px; top: 12px; padding: 4px 10px; color: #061827; background: #9beec3; border-radius: 6px; font-size: 0.72rem; font-weight: 800; letter-spacing: .08em; }
     
@@ -74,7 +74,7 @@
   </section>
 
   <!-- ============================================================== -->
-  <!-- SECTION 1: BOAT TELEMETRY (FLIGHT CONTROLLER POINT & WAVE CREST)-->
+  <!-- SECTION 1: BOAT TELEMETRY (BOW FC NODE & CREST WAVE GRAPHIC)  -->
   <!-- ============================================================== -->
   <section class="telemetry-section" id="section-boat">
     <div class="section-header">
@@ -84,59 +84,77 @@
       <div class="section-subtitle">MAVLink Flight Controller (Tailscale HTTP)</div>
     </div>
 
-    <!-- Hydrodynamic Speed-Animated Crest Visualizer centered at Flight Controller Node -->
-    <div class="water-box" aria-label="Animated water crest originating from Flight Controller point on boat hull">
-      <div class="live-tag">LIVE FC HULL NODE & CREST WAVE GRAPHIC</div>
+    <!-- Hydrodynamic Speed-Animated Crest Visualizer centered at Bow FC Node -->
+    <div class="water-box" aria-label="Animated water crest originating from Bow Flight Controller node on boat hull">
+      <div class="live-tag">LIVE FC BOW NODE & HYDRODYNAMIC CREST GRAPHIC</div>
 
       <svg class="waves" viewBox="0 0 1000 260" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
         <defs>
           <linearGradient id="fc-hull-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stop-color="#046b8c" />
-            <stop offset="50%" stop-color="#43c5db" />
+            <stop offset="0%" stop-color="#023a4d" />
+            <stop offset="35%" stop-color="#046b8c" />
+            <stop offset="70%" stop-color="#43c5db" />
             <stop offset="100%" stop-color="#83e8ff" />
           </linearGradient>
+          <linearGradient id="fc-deck-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#082b42" />
+            <stop offset="100%" stop-color="#0d526e" />
+          </linearGradient>
           <radialGradient id="fc-glow-grad" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stop-color="#83e8ff" stop-opacity="0.9" />
-            <stop offset="60%" stop-color="#43c5db" stop-opacity="0.4" />
+            <stop offset="0%" stop-color="#9beec3" stop-opacity="1.0" />
+            <stop offset="50%" stop-color="#43c5db" stop-opacity="0.5" />
             <stop offset="100%" stop-color="#092b45" stop-opacity="0" />
           </radialGradient>
         </defs>
 
-        <!-- FC Hydrodynamic Wave Crests (Originating at FC Hull Location x=500) -->
+        <!-- FC Hydrodynamic Wave Crests (Originating at Front Bow FC Location x=680) -->
         <path id="wave-back" fill="#0d8bb0" opacity=".62"></path>
         <path id="wave-front" fill="#43c5db" opacity=".78"></path>
 
-        <!-- FC Center Hull Floating Graphic -->
-        <g id="fc-boat-hull-group" transform="translate(500, 130)">
-          <!-- Sleek Racing Boat Hull Outline -->
-          <path d="M -240 5 Q 0 24 240 5 Q 0 12 -240 5 Z" fill="url(#fc-hull-grad)" stroke="#ffffff" stroke-width="1.5" />
-          
-          <!-- Water Line Reference -->
-          <line x1="-260" y1="5" x2="260" y2="5" stroke="rgba(131, 232, 255, 0.4)" stroke-dasharray="6 3" stroke-width="1" />
+        <!-- Dynamic Bow Wave Spray / V-Wake at Front FC Node -->
+        <path id="fc-bow-spray" d="M 680 126 Q 715 110 740 122 Q 710 135 680 126 Z" fill="#83e8ff" opacity="0.8" />
 
-          <!-- FLIGHT CONTROLLER SENSOR NODE (Situated directly at center hull) -->
-          <g id="fc-node" transform="translate(0, 0)">
+        <!-- Floating High-Detail Racing Boat Hull Graphic -->
+        <g id="fc-boat-hull-group" transform="translate(500, 130)">
+          <!-- Realistic Racing Shell Hull Profile (Stern x=-260 to Bow x=+250) -->
+          <!-- Main Bottom Hull Curve -->
+          <path d="M -260 0 Q -240 22 0 24 Q 200 20 250 -4 Q 180 8 -260 0 Z" fill="url(#fc-hull-grad)" stroke="#ffffff" stroke-width="1.5" />
+          <!-- Upper Deck Sheer Line & Bow Tip Ball -->
+          <path d="M -260 0 Q -100 -12 248 -5" fill="none" stroke="#83e8ff" stroke-width="2.0" />
+          <circle cx="250" cy="-5" r="4" fill="#ff4d4d" stroke="#ffffff" stroke-width="1" title="Bow Safety Ball" />
+          
+          <!-- Cockpit / Washboards Deck Outline -->
+          <path d="M -180 -3 L -40 -3 L 20 -3 L 140 -3" fill="none" stroke="rgba(255,255,255,0.4)" stroke-dasharray="8 4" stroke-width="1.5" />
+          
+          <!-- Stern Fin / Skeg -->
+          <path d="M -220 18 L -235 32 L -205 20 Z" fill="#046b8c" stroke="#43c5db" stroke-width="1" />
+
+          <!-- Water Line Axis -->
+          <line x1="-290" y1="6" x2="280" y2="6" stroke="rgba(131, 232, 255, 0.35)" stroke-dasharray="6 4" stroke-width="1" />
+
+          <!-- FLIGHT CONTROLLER (FC) SENSOR NODE (POSITIONED AT FRONT / BOW OF HULL: x = +180) -->
+          <g id="fc-node" transform="translate(180, -4)">
             <!-- Radial Pulse Ring (Expands with FC Speed) -->
-            <circle id="fc-pulse" cx="0" cy="0" r="16" fill="url(#fc-glow-grad)" opacity="0.8" />
-            <circle cx="0" cy="0" r="18" fill="none" stroke="#83e8ff" stroke-width="1.5" opacity="0.6" />
+            <circle id="fc-pulse" cx="0" cy="0" r="16" fill="url(#fc-glow-grad)" opacity="0.85" />
+            <circle cx="0" cy="0" r="18" fill="none" stroke="#9beec3" stroke-width="1.8" opacity="0.7" />
             
             <!-- Sensor Chip Icon -->
-            <rect x="-8" y="-8" width="16" height="16" rx="3" fill="#030d17" stroke="#9beec3" stroke-width="2" />
-            <circle cx="0" cy="0" r="3" fill="#9beec3" />
+            <rect x="-9" y="-9" width="18" height="18" rx="4" fill="#030d17" stroke="#9beec3" stroke-width="2" />
+            <circle cx="0" cy="0" r="3.5" fill="#9beec3" />
 
-            <!-- Sensor Node Marker Line -->
-            <line x1="0" y1="-8" x2="0" y2="-24" stroke="#83e8ff" stroke-width="1.5" stroke-dasharray="2 2" />
+            <!-- Sensor Node Marker Pole -->
+            <line x1="0" y1="-9" x2="0" y2="-28" stroke="#9beec3" stroke-width="1.5" stroke-dasharray="2 2" />
 
-            <!-- Sensor Badge Label -->
-            <g transform="translate(0, -32)">
-              <rect x="-65" y="-12" width="130" height="20" rx="4" fill="rgba(3, 13, 23, 0.9)" stroke="#43c5db" stroke-width="1" />
-              <text x="0" y="2" text-anchor="middle" fill="#83e8ff" font-size="9" font-weight="800" letter-spacing="0.05em">📍 FC SENSOR NODE</text>
+            <!-- Sensor HUD Badge Label situated at Bow FC -->
+            <g transform="translate(0, -36)">
+              <rect x="-70" y="-12" width="140" height="22" rx="5" fill="rgba(3, 13, 23, 0.92)" stroke="#9beec3" stroke-width="1.2" />
+              <text x="0" y="3" text-anchor="middle" fill="#9beec3" font-size="9" font-weight="800" letter-spacing="0.06em">📍 BOW FC SENSOR NODE</text>
             </g>
           </g>
 
-          <!-- FC Bow Spray / Hydrodynamic Crest Ripples at Node -->
-          <circle id="fc-ripple-1" cx="0" cy="5" r="12" fill="none" stroke="#83e8ff" stroke-width="1.5" opacity="0.8" />
-          <circle id="fc-ripple-2" cx="0" cy="5" r="28" fill="none" stroke="#43c5db" stroke-width="1.0" opacity="0.5" />
+          <!-- FC Hydrodynamic Ripples at Front Bow Node -->
+          <circle id="fc-ripple-1" cx="180" cy="4" r="12" fill="none" stroke="#9beec3" stroke-width="1.5" opacity="0.8" />
+          <circle id="fc-ripple-2" cx="180" cy="4" r="28" fill="none" stroke="#43c5db" stroke-width="1.0" opacity="0.5" />
         </g>
       </svg>
     </div>
@@ -192,16 +210,17 @@
       <div class="section-subtitle">Accelerometer & Gyroscope Sensor Network</div>
     </div>
 
-    <!-- Dual Paddler Racing Shell Visualizer with Rotating Oars & Side Switch -->
+    <!-- Realistic Dual Paddler Racing Shell Visualizer -->
     <div class="water-box" aria-label="Animated dual paddler racing shell">
       <div class="live-tag">LIVE DUAL PADDLER OAR SWEEP & SIDE SWITCH</div>
       
       <div id="boat-container" class="boat-graphic">
-        <svg id="paddling-svg" viewBox="0 0 450 160" width="380" height="135">
+        <svg id="paddling-svg" viewBox="0 0 500 170" width="440" height="150">
           <defs>
-            <linearGradient id="hull-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stop-color="#046b8c" />
-              <stop offset="50%" stop-color="#43c5db" />
+            <linearGradient id="paddler-hull-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#023a4d" />
+              <stop offset="40%" stop-color="#046b8c" />
+              <stop offset="80%" stop-color="#43c5db" />
               <stop offset="100%" stop-color="#83e8ff" />
             </linearGradient>
             <linearGradient id="oar-grad" x1="0%" y1="0%" x2="0%" y2="100%">
@@ -210,34 +229,53 @@
             </linearGradient>
           </defs>
 
-          <!-- Racing Shell Hull -->
-          <path d="M 20 95 Q 220 120 430 95 Q 220 108 20 95 Z" fill="url(#hull-grad)" stroke="#ffffff" stroke-width="1.5" />
-          <path d="M 40 95 Q 220 104 410 95" fill="none" stroke="rgba(255,255,255,0.4)" stroke-dasharray="4 2" />
+          <!-- High-Detail Sleek Racing Shell Hull Path (Facing Right) -->
+          <g id="paddler-shell-hull">
+            <path d="M 20 100 Q 250 128 470 98 Q 250 114 20 100 Z" fill="url(#paddler-hull-grad)" stroke="#ffffff" stroke-width="1.8" />
+            <path d="M 35 100 Q 250 110 455 99" fill="none" stroke="rgba(255,255,255,0.45)" stroke-dasharray="5 3" stroke-width="1.2" />
+            <circle cx="472" cy="98" r="3.5" fill="#ff4d4d" stroke="#ffffff" stroke-width="1" />
+            
+            <!-- Cockpit Seat Openings -->
+            <rect x="120" y="93" width="50" height="6" rx="2" fill="#030d17" stroke="#43c5db" stroke-width="1" />
+            <rect x="300" y="93" width="50" height="6" rx="2" fill="#030d17" stroke="#43c5db" stroke-width="1" />
+          </g>
 
           <!-- Paddler 2 (Stern / Rear rower) -->
-          <g id="paddler-2" transform="translate(130, 60)">
-            <circle cx="0" cy="-12" r="10" fill="#9beec3" stroke="#061827" stroke-width="1.5" />
-            <path d="M -8 0 Q 0 -5 12 -2 L 14 26 L -6 26 Z" fill="#43c5db" />
+          <g id="paddler-2" transform="translate(145, 62)">
+            <!-- Head & Life Vest Body -->
+            <circle cx="0" cy="-14" r="10" fill="#9beec3" stroke="#061827" stroke-width="2" />
+            <!-- Cap / Helmet Detail -->
+            <path d="M -9 -18 Q 0 -24 9 -18 Z" fill="#046b8c" />
+            <path d="M -10 0 Q 0 -6 14 -2 L 16 28 L -8 28 Z" fill="#43c5db" stroke="#061827" stroke-width="1.2" />
+            
+            <!-- Dynamic Oar Assembly -->
             <g id="oar-group-2" transform="translate(4, 12)">
-              <line x1="-12" y1="-8" x2="42" y2="45" stroke="#ffb830" stroke-width="4.5" stroke-linecap="round" />
-              <path d="M 38 42 L 54 56 Q 50 62 40 54 Z" fill="url(#oar-grad)" />
-              <ellipse id="splash-2" cx="48" cy="52" rx="14" ry="4" fill="none" stroke="#83e8ff" stroke-width="2" opacity="0" />
+              <line x1="-14" y1="-8" x2="48" y2="48" stroke="#ffb830" stroke-width="5.0" stroke-linecap="round" />
+              <path d="M 44 44 L 62 60 Q 56 68 46 58 Z" fill="url(#oar-grad)" stroke="#ffffff" stroke-width="1" />
+              <!-- Water Splash Flare -->
+              <ellipse id="splash-2" cx="54" cy="56" rx="16" ry="5" fill="none" stroke="#83e8ff" stroke-width="2" opacity="0" />
             </g>
           </g>
 
           <!-- Paddler 1 (Bow / Front rower) -->
-          <g id="paddler-1" transform="translate(290, 60)">
-            <circle cx="0" cy="-12" r="10" fill="#83e8ff" stroke="#061827" stroke-width="1.5" />
-            <path d="M -8 0 Q 0 -5 12 -2 L 14 26 L -6 26 Z" fill="#0d8bb0" />
+          <g id="paddler-1" transform="translate(325, 62)">
+            <!-- Head & Life Vest Body -->
+            <circle cx="0" cy="-14" r="10" fill="#83e8ff" stroke="#061827" stroke-width="2" />
+            <!-- Cap / Helmet Detail -->
+            <path d="M -9 -18 Q 0 -24 9 -18 Z" fill="#0d8bb0" />
+            <path d="M -10 0 Q 0 -6 14 -2 L 16 28 L -8 28 Z" fill="#0d8bb0" stroke="#061827" stroke-width="1.2" />
+            
+            <!-- Dynamic Oar Assembly -->
             <g id="oar-group-1" transform="translate(4, 12)">
-              <line x1="-12" y1="-8" x2="42" y2="45" stroke="#ffb830" stroke-width="4.5" stroke-linecap="round" />
-              <path d="M 38 42 L 54 56 Q 50 62 40 54 Z" fill="url(#oar-grad)" />
-              <ellipse id="splash-1" cx="48" cy="52" rx="14" ry="4" fill="none" stroke="#83e8ff" stroke-width="2" opacity="0" />
+              <line x1="-14" y1="-8" x2="48" y2="48" stroke="#ffb830" stroke-width="5.0" stroke-linecap="round" />
+              <path d="M 44 44 L 62 60 Q 56 68 46 58 Z" fill="url(#oar-grad)" stroke="#ffffff" stroke-width="1" />
+              <!-- Water Splash Flare -->
+              <ellipse id="splash-1" cx="54" cy="56" rx="16" ry="5" fill="none" stroke="#83e8ff" stroke-width="2" opacity="0" />
             </g>
           </g>
 
-          <!-- Dynamic Bow Wave Spray -->
-          <path id="bow-spray" d="M 425 96 Q 440 92 448 97 Q 436 102 425 96 Z" fill="#83e8ff" opacity="0.8" />
+          <!-- Dynamic Bow Wave V-Spray -->
+          <path id="bow-spray" d="M 465 99 Q 485 94 494 100 Q 480 106 465 99 Z" fill="#83e8ff" opacity="0.8" />
         </svg>
       </div>
     </div>
@@ -329,26 +367,26 @@
 
       const format = (val, unit = '', dec = 1) => val == null ? '—' : `${Number(val).toFixed(dec)}${unit}`;
 
-      // Hydrodynamic Wave Generator originating directly at FC point on the hull (x=500)
+      // Hydrodynamic Wave Generator originating directly at Front Bow FC point on hull (x=680)
       const fcWave = (phaseVal, amplitude, baseline, freqMultiplier) => {
-        const xFC = 500;
+        const xFC = 680; // Front Bow FC Node position
         const boatSpeed = Number(telemetry.speed_kmh || 0);
         const pitchVal = Number(telemetry.pitch_deg || 0);
         
         // Spread radius expands outward from FC location as boat speed increases
-        const spread = 220 + (boatSpeed * 18);
+        const spread = 240 + (boatSpeed * 20);
         
         let path = `M 0 260 L 0 ${baseline}`;
         for (let x = 0; x <= 1000; x += 15) {
           const dist = Math.abs(x - xFC);
-          // Gaussian attenuation centered at FC point (x=500)
+          // Gaussian attenuation centered at Front Bow FC point (x=680)
           const attenuation = Math.exp(- (dist * dist) / (2 * spread * spread));
           
-          // Wave crest calculation originating at FC point
-          const waveSin = Math.sin((dist / (30.0 * freqMultiplier)) - phaseVal) * amplitude * attenuation;
+          // Wave crest calculation originating at Front Bow FC point
+          const waveSin = Math.sin((dist / (28.0 * freqMultiplier)) - phaseVal) * amplitude * attenuation;
           
           // Pitch tilt offset across hull length
-          const tiltOffset = (x - xFC) * Math.sin((pitchVal * Math.PI) / 180.0) * 0.8;
+          const tiltOffset = (x - xFC) * Math.sin((pitchVal * Math.PI) / 180.0) * 0.75;
           
           const y = baseline + waveSin + tiltOffset;
           path += ` L ${x.toFixed(1)} ${y.toFixed(1)}`;
@@ -370,13 +408,19 @@
         const boatSpeed = Number(telemetry.speed_kmh || 0);
         const yawStab = Number(telemetry.yaw_stability_10s_dps || 0);
 
-        // 1. FC POINT & BOAT TELEMETRY WATER CREST ANIMATION:
+        // 1. FC BOW POINT & BOAT TELEMETRY WATER CREST ANIMATION:
         const energy = Math.min(48, 6 + boatSpeed * 3.5 + yawStab * 5);
         phase += 0.015 + (boatSpeed * 0.015);
         
-        // Wave crests originate at FC point on the hull (x=500)
+        // Wave crests originate at Front Bow FC point on the hull (x=680)
         $('wave-back').setAttribute('d', fcWave(phase * 0.8, energy * 0.7, 168, 1.2));
         $('wave-front').setAttribute('d', fcWave(phase, energy, 185, 1.0));
+
+        // Animate Bow Wave V-Spray Intensity at FC Node
+        const bowSpray = $('fc-bow-spray');
+        if (bowSpray) {
+          bowSpray.setAttribute('opacity', Math.min(1.0, 0.1 + (boatSpeed / 5.0)).toFixed(2));
+        }
 
         // Animate FC Hull Node tilt based on live Roll & Pitch telemetry from FC
         const hullGroup = $('fc-boat-hull-group');
@@ -386,7 +430,7 @@
           hullGroup.setAttribute('transform', `translate(500, ${130 + (roll * 0.8)}) rotate(${(-pitch).toFixed(1)})`);
         }
 
-        // FC Ripple expansion from FC Node
+        // FC Ripple expansion from Bow FC Node
         const pulse = $('fc-pulse');
         if (pulse) {
           const rScale = 14 + (Math.sin(phase * 3.0) * (4 + boatSpeed * 1.5));
