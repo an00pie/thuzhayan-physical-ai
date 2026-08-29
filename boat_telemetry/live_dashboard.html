@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Thuzhayan · RPi 5 Physical AI Boat & Paddle Telemetry</title>
+</head>
+<body style="margin: 0; background: #030d17; color: #e8f5fb; font-family: system-ui, -apple-system, sans-serif;">
+<main id="thuzhayan-live-dashboard">
+  <style>
+    #thuzhayan-live-dashboard { max-width: 1020px; margin: 24px auto; padding: 0 20px; box-sizing: border-box; }
+    #thuzhayan-live-dashboard * { box-sizing: border-box; }
+    .badge-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+    .badge { padding: 4px 10px; border-radius: 20px; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #9cc0d2; }
+    .badge.active { background: rgba(67, 197, 219, 0.15); border-color: #43c5db; color: #43c5db; }
+    .badge.alert { background: rgba(255, 77, 77, 0.2); border-color: #ff4d4d; color: #ff6b6b; }
+    
+    .topline { display: flex; justify-content: space-between; gap: 14px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+    h1 { margin: 0; font-size: clamp(1.6rem, 4vw, 2.4rem); letter-spacing: .02em; background: linear-gradient(135deg, #ffffff 0%, #83e8ff 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .tag { color: #83e8ff; font-size: .85rem; text-transform: uppercase; letter-spacing: .14em; font-weight: 700; }
+    .state { padding: 6px 14px; background: rgba(155, 238, 195, 0.12); border: 1px solid #9beec3; color: #9beec3; border-radius: 8px; font-weight: 700; }
+    
+    .water { position: relative; height: 220px; overflow: hidden; border: 1px solid #23516d; border-radius: 16px; background: linear-gradient(#092b45 0%, #073a59 72%, #046b8c 100%); margin-bottom: 20px; }
+    .water svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .boat-graphic { position: absolute; z-index: 2; left: 50%; top: 48%; transform: translate(-50%, -50%); filter: drop-shadow(0 10px 14px #01101a); transition: transform 0.3s ease; }
+    .live-tag { position: absolute; z-index: 3; left: 18px; top: 14px; padding: 5px 10px; color: #061827; background: #9beec3; border-radius: 6px; font-size: .75rem; font-weight: 800; letter-spacing: .1em; }
+    
+    .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 24px; }
+    .metric { padding: 14px; border: 1px solid #1a3c54; border-radius: 12px; background: #081e30; backdrop-filter: blur(8px); }
+    .metric small { display: block; color: #82a8bc; text-transform: uppercase; letter-spacing: .08em; font-size: 0.72rem; margin-bottom: 4px; }
+    .metric strong { font-size: 1.3rem; color: #ffffff; }
+
+    .tabs { display: flex; gap: 8px; border-bottom: 1px solid #1a3c54; margin-bottom: 16px; }
+    .tab-btn { padding: 10px 18px; background: transparent; border: none; border-bottom: 2px solid transparent; color: #82a8bc; font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    .tab-btn.active { color: #83e8ff; border-bottom-color: #83e8ff; }
+    .tab-content { display: none; padding: 18px; border: 1px solid #1a3c54; border-radius: 12px; background: #081e30; white-space: pre-wrap; color: #d6eaf4; line-height: 1.6; }
+    .tab-content.active { display: block; }
+    
+    .btn-action { padding: 10px 20px; background: linear-gradient(135deg, #0d8bb0, #046b8c); border: none; border-radius: 8px; color: white; font-weight: 700; cursor: pointer; transition: opacity 0.2s; margin-bottom: 12px; }
+    .btn-action:hover { opacity: 0.9; }
+  </style>
+
+  <section class="badge-row">
+    <div class="badge active">🍓 Raspberry Pi 5 Core</div>
+    <div id="gemma-model-badge" class="badge active">🤖 Local Gemma Model: Detect…</div>
+    <div class="badge active">☁️ Google Cloud Gemini API</div>
+    <div id="gpio-badge" class="badge">GPIO Pin 17: Normal</div>
+  </section>
+
+  <section class="topline">
+    <div>
+      <div class="tag">Thuzhayan Telemetry System</div>
+      <h1>Physical AI Boat & Paddle Telemetry</h1>
+    </div>
+    <div id="state" class="state">Connecting hardware…</div>
+  </section>
+
+  <section class="water" aria-label="Animated water crest showing boat & paddler motion">
+    <div class="live-tag">LIVE SENSORS & DUAL PADDLER ANIMATION</div>
+    
+    <!-- SVG Interactive Racing Shell & Dual Paddler Animation -->
+    <div id="boat-container" class="boat-graphic">
+      <svg id="paddling-svg" viewBox="0 0 450 160" width="380" height="135">
+        <defs>
+          <linearGradient id="hull-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#046b8c" />
+            <stop offset="50%" stop-color="#43c5db" />
+            <stop offset="100%" stop-color="#83e8ff" />
+          </linearGradient>
+          <linearGradient id="oar-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#ffb830" />
+            <stop offset="100%" stop-color="#ff4d4d" />
+          </linearGradient>
+        </defs>
+
+        <!-- Racing Shell Hull -->
+        <path d="M 20 95 Q 220 120 430 95 Q 220 108 20 95 Z" fill="url(#hull-grad)" stroke="#ffffff" stroke-width="1.5" />
+        <path d="M 40 95 Q 220 104 410 95" fill="none" stroke="rgba(255,255,255,0.4)" stroke-dasharray="4 2" />
+
+        <!-- Paddler 2 (Stern / Rear rower) -->
+        <g id="paddler-2" transform="translate(130, 60)">
+          <!-- Rower Body & Head -->
+          <circle cx="0" cy="-12" r="10" fill="#9beec3" stroke="#061827" stroke-width="1.5" />
+          <path d="M -8 0 Q 0 -5 12 -2 L 14 26 L -6 26 Z" fill="#43c5db" />
+          <!-- Oar Assembly -->
+          <g id="oar-group-2" transform="translate(4, 12)">
+            <line x1="-12" y1="-8" x2="42" y2="45" stroke="#ffb830" stroke-width="4.5" stroke-linecap="round" />
+            <path d="M 38 42 L 54 56 Q 50 62 40 54 Z" fill="url(#oar-grad)" />
+            <!-- Water Splash Ring -->
+            <ellipse id="splash-2" cx="48" cy="52" rx="14" ry="4" fill="none" stroke="#83e8ff" stroke-width="2" opacity="0" />
+          </g>
+        </g>
+
+        <!-- Paddler 1 (Bow / Front rower) -->
+        <g id="paddler-1" transform="translate(290, 60)">
+          <!-- Rower Body & Head -->
+          <circle cx="0" cy="-12" r="10" fill="#83e8ff" stroke="#061827" stroke-width="1.5" />
+          <path d="M -8 0 Q 0 -5 12 -2 L 14 26 L -6 26 Z" fill="#0d8bb0" />
+          <!-- Oar Assembly -->
+          <g id="oar-group-1" transform="translate(4, 12)">
+            <line x1="-12" y1="-8" x2="42" y2="45" stroke="#ffb830" stroke-width="4.5" stroke-linecap="round" />
+            <path d="M 38 42 L 54 56 Q 50 62 40 54 Z" fill="url(#oar-grad)" />
+            <!-- Water Splash Ring -->
+            <ellipse id="splash-1" cx="48" cy="52" rx="14" ry="4" fill="none" stroke="#83e8ff" stroke-width="2" opacity="0" />
+          </g>
+        </g>
+
+        <!-- Dynamic Bow Wave Spray -->
+        <path id="bow-spray" d="M 425 96 Q 440 92 448 97 Q 436 102 425 96 Z" fill="#83e8ff" opacity="0.8" />
+      </svg>
+    </div>
+
+    <svg viewBox="0 0 1000 260" preserveAspectRatio="none" aria-hidden="true">
+      <path id="wave-back" fill="#0d8bb0" opacity=".62"></path>
+      <path id="wave-front" fill="#43c5db" opacity=".78"></path>
+    </svg>
+  </section>
+
+  <section class="metrics">
+    <div class="metric"><small>Boat Speed</small><strong id="speed">—</strong></div>
+    <div class="metric"><small>Split 500m Pace</small><strong id="split-500m" style="color:#83e8ff;">—</strong></div>
+    <div class="metric"><small>Paddler Synchronization</small><strong id="sync-score" style="color:#9beec3;">—</strong></div>
+    <div class="metric"><small>Distance Per Stroke</small><strong id="dps-m">—</strong></div>
+    <div class="metric"><small>Yaw Stability</small><strong id="yaw">—</strong></div>
+    <div class="metric"><small>Course / Heading</small><strong id="heading">—</strong></div>
+    <div class="metric"><small>Drift Angle</small><strong id="drift">—</strong></div>
+    <div class="metric"><small>Hull Roll / Pitch</small><strong id="trim">—</strong></div>
+    <div class="metric"><small>Paddler 1 vs 2 SPM</small><strong id="paddle-spm">—</strong></div>
+    <div class="metric"><small>Paddle Peak Accel</small><strong id="paddle-accel">—</strong></div>
+  </section>
+
+  <section class="tabs">
+    <button class="tab-btn active" onclick="switchTab('gemma-tab')">🤖 Local Gemma Edge Coach</button>
+    <button class="tab-btn" onclick="switchTab('gemini-tab')">☁️ Cloud Gemini Report</button>
+    <button class="tab-btn" onclick="switchTab('report-tab')">📋 Telemetry Session Log</button>
+  </section>
+
+  <div id="gemma-tab" class="tab-content active">
+    <div style="font-weight:700; color:#83e8ff; margin-bottom:8px;">Real-Time Physical AI Coaching (Gemma Edge Inference on RPi 5):</div>
+    <div id="gemma-advice">Initializing Gemma model edge advisor...</div>
+  </div>
+
+  <div id="gemini-tab" class="tab-content">
+    <button class="btn-action" onclick="fetchGeminiReport()">Run Deep Cloud Gemini Analysis</button>
+    <div id="gemini-report">Click the button above to execute deep hydrodynamic performance analysis with Google Cloud Gemini.</div>
+  </div>
+
+  <div id="report-tab" class="tab-content">
+    <pre id="report" style="margin:0; font-family:inherit;">Loading session report...</pre>
+  </div>
+
+  <script>
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+      event.target.classList.add('active');
+      document.getElementById(tabId).classList.add('active');
+    }
+
+    async function fetchGeminiReport() {
+      const el = document.getElementById('gemini-report');
+      el.textContent = "⏳ Communicating with Google Cloud Gemini API...";
+      try {
+        const resp = await fetch('/api/gemini/report', { cache: 'no-store' });
+        const data = await resp.json();
+        el.textContent = data.analysis || "No analysis returned.";
+      } catch (err) {
+        el.textContent = "Error reaching Gemini Cloud API: " + err;
+      }
+    }
+
+    (() => {
+      const $ = id => document.getElementById(id);
+      let telemetry = { speed_kmh: 0, yaw_stability_10s_dps: 0 };
+      let phase = 0;
+
+      const format = (val, unit = '', dec = 1) => val == null ? '—' : `${Number(val).toFixed(dec)}${unit}`;
+
+      const wave = (phaseVal, amplitude, baseline) => {
+        let path = `M0 ${baseline}`;
+        for (let x = 0; x <= 1000; x += 20) {
+          const y = baseline + Math.sin((x / 1000) * Math.PI * 4 + phaseVal) * amplitude + Math.sin((x / 1000) * Math.PI * 8 + phaseVal * 1.7) * amplitude * .28;
+          path += ` L${x} ${y.toFixed(1)}`;
+        }
+        return `${path} L1000 260 L0 260 Z`;
+      };
+
+      let paddleData = { stroke_rate_spm: 30.0, sync_percentage: 95.0 };
+      let strokePhase1 = 0;
+      let strokePhase2 = 0;
+
+      const animate = () => {
+        const energy = Math.min(36, 6 + Number(telemetry.speed_kmh || 0) * 3 + Number(telemetry.yaw_stability_10s_dps || 0) * 8);
+        phase += .022 + Number(telemetry.speed_kmh || 0) * .002;
+        $('wave-back').setAttribute('d', wave(phase * .7, energy * .68, 165));
+        $('wave-front').setAttribute('d', wave(phase, energy, 184));
+
+        // Dynamic Paddling Oar Animation
+        const spm = Math.max(12, Number(paddleData.stroke_rate_spm || 30.0));
+        const syncPct = Number(paddleData.sync_percentage || 95.0);
+        
+        // Speed up stroke rotation with SPM
+        const strokeSpeed = (spm / 60.0) * 0.14;
+        strokePhase1 += strokeSpeed;
+        
+        // Introduce phase lag for Paddler 2 when sync is below 100%
+        const phaseLag = (100.0 - syncPct) * 0.035;
+        strokePhase2 = strokePhase1 - phaseLag;
+
+        // Oar rotation angle calculation: sinusoid dipping from -24° (recovery) to +22° (drive)
+        const angle1 = Math.sin(strokePhase1 * Math.PI * 2) * 23;
+        const angle2 = Math.sin(strokePhase2 * Math.PI * 2) * 23;
+
+        const oar1 = $('oar-group-1');
+        const oar2 = $('oar-group-2');
+        if (oar1) oar1.setAttribute('transform', `translate(4, 12) rotate(${angle1.toFixed(1)})`);
+        if (oar2) oar2.setAttribute('transform', `translate(4, 12) rotate(${angle2.toFixed(1)})`);
+
+        // Water Splash Flare when blade dips into water (angle > 10°)
+        const splash1 = $('splash-1');
+        const splash2 = $('splash-2');
+        if (splash1) splash1.setAttribute('opacity', angle1 > 10 ? (angle1 - 10) / 13 : 0);
+        if (splash2) splash2.setAttribute('opacity', angle2 > 10 ? (angle2 - 10) / 13 : 0);
+
+        requestAnimationFrame(animate);
+      };
+
+      const updateBoat = data => {
+        if (data.state === 'waiting') return;
+        telemetry = data;
+        const speed = Number(data.speed_kmh || 0);
+        $('state').textContent = data.gps_healthy ? (speed < .72 ? 'Stationary' : 'Moving') : 'GPS Acquiring';
+        $('speed').textContent = format(data.speed_kmh, ' km/h');
+        
+        // Calculate Split 500m pace
+        if (speed > 0.1) {
+          const splitSecs = 500.0 / (speed / 3.6);
+          const m = Math.floor(splitSecs / 60);
+          const s = Math.floor(splitSecs % 60);
+          $('split-500m').textContent = `${m}:${s < 10 ? '0' : ''}${s} /500m`;
+        } else {
+          $('split-500m').textContent = '— /500m';
+        }
+
+        $('heading').textContent = `${format(data.course_deg, '°')} / ${format(data.heading_deg, '°')}`;
+        $('yaw').textContent = format(data.yaw_stability_10s_dps, '°/s');
+        $('drift').textContent = format(data.drift_deg, '°');
+        $('trim').textContent = `${format(data.roll_deg, '°')}, ${format(data.pitch_deg, '°')}`;
+
+        const gpioBadge = $('gpio-badge');
+        if (data.gpio_alert_active) {
+          gpioBadge.className = 'badge alert';
+          gpioBadge.textContent = 'GPIO Pin 17: ALERT ACTIVE 🚨';
+        } else {
+          gpioBadge.className = 'badge active';
+          gpioBadge.textContent = 'GPIO Pin 17: Normal';
+        }
+      };
+
+      const updatePaddle = data => {
+        if (data.state === 'waiting') return;
+        paddleData = data;
+        
+        const syncPct = data.sync_percentage ?? 95.0;
+        $('sync-score').textContent = `${Number(syncPct).toFixed(1)}% Sync`;
+
+        const spm = Number(data.stroke_rate_spm || 0);
+        const p1Spm = data.paddler_1 ? data.paddler_1.spm : spm;
+        const p2Spm = data.paddler_2 ? data.paddler_2.spm : spm;
+        $('paddle-spm').textContent = `P1: ${p1Spm} | P2: ${p2Spm}`;
+        $('paddle-accel').textContent = format(data.peak_accel_g, ' g');
+
+        // Distance per stroke (DPS)
+        const speed = Number(telemetry.speed_kmh || 0);
+        if (spm > 0 && speed > 0) {
+          const dps = ((speed / 3.6) * 60.0) / spm;
+          $('dps-m').textContent = `${dps.toFixed(2)} m/stroke`;
+        } else {
+          $('dps-m').textContent = '—';
+        }
+      };
+
+      const updateGemma = data => {
+        if (data.advice) {
+          $('gemma-advice').textContent = data.advice;
+        }
+        if (data.gemma_model) {
+          $('gemma-model-badge').textContent = `🤖 Local Gemma Model (${data.gemma_model})`;
+        } else if (data.engine) {
+          $('gemma-model-badge').textContent = `🤖 Local Gemma (${data.engine})`;
+        }
+      };
+
+      const poll = async () => {
+        try { updateBoat(await (await fetch('/api/latest', { cache: 'no-store' })).json()); } catch (_) {}
+        try { updatePaddle(await (await fetch('/api/paddle/latest', { cache: 'no-store' })).json()); } catch (_) {}
+        try { updateGemma(await (await fetch('/api/gemma/advice', { cache: 'no-store' })).json()); } catch (_) {}
+        try { $('report').textContent = (await (await fetch('/api/overall', { cache: 'no-store' })).json()).report; } catch (_) {}
+      };
+
+      poll();
+      setInterval(poll, 1500);
+      animate();
+    })();
+  </script>
+</main>
+</body>
+</html>
