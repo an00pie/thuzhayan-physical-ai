@@ -5,49 +5,55 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Thuzhayan · RPi 5 Physical AI Boat & Paddle Telemetry</title>
 </head>
-<body style="margin: 0; background: #030d17; color: #e8f5fb; font-family: system-ui, -apple-system, sans-serif;">
+<body style="margin: 0; background: #030d17; color: #e8f5fb; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
 <main id="thuzhayan-live-dashboard">
   <style>
-    #thuzhayan-live-dashboard { max-width: 1020px; margin: 24px auto; padding: 0 20px; box-sizing: border-box; }
+    #thuzhayan-live-dashboard { max-width: 1060px; margin: 24px auto; padding: 0 20px 40px; box-sizing: border-box; }
     #thuzhayan-live-dashboard * { box-sizing: border-box; }
-    .badge-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-    .badge { padding: 4px 10px; border-radius: 20px; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #9cc0d2; }
+    
+    .badge-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+    .badge { padding: 5px 12px; border-radius: 20px; font-size: 0.76rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #9cc0d2; }
     .badge.active { background: rgba(67, 197, 219, 0.15); border-color: #43c5db; color: #43c5db; }
     .badge.alert { background: rgba(255, 77, 77, 0.2); border-color: #ff4d4d; color: #ff6b6b; }
     
-    .topline { display: flex; justify-content: space-between; gap: 14px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+    .topline { display: flex; justify-content: space-between; gap: 14px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
     h1 { margin: 0; font-size: clamp(1.6rem, 4vw, 2.4rem); letter-spacing: .02em; background: linear-gradient(135deg, #ffffff 0%, #83e8ff 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
     .tag { color: #83e8ff; font-size: .85rem; text-transform: uppercase; letter-spacing: .14em; font-weight: 700; }
-    .state { padding: 6px 14px; background: rgba(155, 238, 195, 0.12); border: 1px solid #9beec3; color: #9beec3; border-radius: 8px; font-weight: 700; }
+    .state { padding: 6px 16px; background: rgba(155, 238, 195, 0.12); border: 1px solid #9beec3; color: #9beec3; border-radius: 8px; font-weight: 700; font-size: 0.9rem; }
     
-    .water { position: relative; height: 220px; overflow: hidden; border: 1px solid #23516d; border-radius: 16px; background: linear-gradient(#092b45 0%, #073a59 72%, #046b8c 100%); margin-bottom: 20px; }
-    .water svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+    /* SECTION CONTAINERS */
+    .telemetry-section { background: rgba(8, 30, 48, 0.65); border: 1px solid #1a3c54; border-radius: 16px; padding: 20px; margin-bottom: 28px; backdrop-filter: blur(10px); box-shadow: 0 10px 24px rgba(0,0,0,0.3); }
+    .section-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(26, 60, 84, 0.8); padding-bottom: 12px; margin-bottom: 16px; }
+    .section-title { font-size: 1.15rem; font-weight: 800; color: #83e8ff; letter-spacing: 0.04em; display: flex; align-items: center; gap: 8px; }
+    .section-subtitle { font-size: 0.78rem; color: #82a8bc; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+    
+    /* ANIMATIONS & VISUALIZERS */
+    .water-box { position: relative; height: 160px; overflow: hidden; border: 1px solid #23516d; border-radius: 12px; background: linear-gradient(#092b45 0%, #073a59 72%, #046b8c 100%); margin-bottom: 16px; }
+    .water-box svg.waves { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .live-tag { position: absolute; z-index: 3; left: 16px; top: 12px; padding: 4px 10px; color: #061827; background: #9beec3; border-radius: 6px; font-size: 0.72rem; font-weight: 800; letter-spacing: .08em; }
+    
     .boat-graphic { position: absolute; z-index: 2; left: 50%; top: 48%; transform: translate(-50%, -50%); filter: drop-shadow(0 10px 14px #01101a); transition: transform 0.3s ease; }
-    .live-tag { position: absolute; z-index: 3; left: 18px; top: 14px; padding: 5px 10px; color: #061827; background: #9beec3; border-radius: 6px; font-size: .75rem; font-weight: 800; letter-spacing: .1em; }
     
-    .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 24px; }
-    .metric { padding: 14px; border: 1px solid #1a3c54; border-radius: 12px; background: #081e30; backdrop-filter: blur(8px); }
-    .metric small { display: block; color: #82a8bc; text-transform: uppercase; letter-spacing: .08em; font-size: 0.72rem; margin-bottom: 4px; }
-    .metric strong { font-size: 1.3rem; color: #ffffff; }
-
+    /* METRICS GRIDS */
+    .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+    .metric-card { padding: 14px 16px; border: 1px solid #1a3c54; border-radius: 12px; background: #081e30; transition: transform 0.2s, border-color 0.2s; }
+    .metric-card:hover { border-color: #43c5db; transform: translateY(-2px); }
+    .metric-card small { display: block; color: #82a8bc; text-transform: uppercase; letter-spacing: .08em; font-size: 0.7rem; font-weight: 700; margin-bottom: 6px; }
+    .metric-card strong { font-size: 1.25rem; color: #ffffff; font-weight: 800; }
+    .metric-card .sub-value { font-size: 0.78rem; color: #9cc0d2; margin-top: 4px; font-weight: 600; }
+    
+    /* TABS */
     .tabs { display: flex; gap: 8px; border-bottom: 1px solid #1a3c54; margin-bottom: 16px; }
-    .tab-btn { padding: 10px 18px; background: transparent; border: none; border-bottom: 2px solid transparent; color: #82a8bc; font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    .tab-btn { padding: 12px 20px; background: transparent; border: none; border-bottom: 2px solid transparent; color: #82a8bc; font-size: 0.95rem; font-weight: 700; cursor: pointer; transition: all 0.2s; }
     .tab-btn.active { color: #83e8ff; border-bottom-color: #83e8ff; }
-    .tab-content { display: none; padding: 18px; border: 1px solid #1a3c54; border-radius: 12px; background: #081e30; white-space: pre-wrap; color: #d6eaf4; line-height: 1.6; }
+    .tab-content { display: none; padding: 20px; border: 1px solid #1a3c54; border-radius: 12px; background: #081e30; color: #d6eaf4; line-height: 1.6; }
     .tab-content.active { display: block; }
     
     .btn-action { padding: 10px 20px; background: linear-gradient(135deg, #0d8bb0, #046b8c); border: none; border-radius: 8px; color: white; font-weight: 700; cursor: pointer; transition: opacity 0.2s; margin-bottom: 12px; }
     .btn-action:hover { opacity: 0.9; }
-
-    /* Traffic Light Sync Indicator Styles */
-    .traffic-light-box { position: absolute; z-index: 4; right: 18px; top: 12px; display: flex; flex-direction: column; align-items: center; background: rgba(6, 24, 39, 0.88); border: 1px solid #23516d; padding: 6px 12px; border-radius: 12px; backdrop-filter: blur(6px); box-shadow: 0 6px 12px rgba(0,0,0,0.4); }
-    .light-title { font-size: 0.62rem; color: #82a8bc; font-weight: 800; letter-spacing: 0.1em; margin-bottom: 4px; }
-    .traffic-housing { display: flex; gap: 8px; background: #030d15; border: 1px solid #142e42; padding: 5px 10px; border-radius: 20px; }
-    .led { width: 14px; height: 14px; border-radius: 50%; opacity: 0.2; transition: all 0.3s ease; }
-    .led.red { background: #ff4d4d; }
-    .led.red.active { opacity: 1.0; box-shadow: 0 0 14px #ff4d4d; }
   </style>
 
+  <!-- TOP STATUS BADGES -->
   <section class="badge-row">
     <div class="badge active">🍓 Raspberry Pi 5 Core</div>
     <div id="gemma-model-badge" class="badge active">🤖 Local Gemma Model: Detect…</div>
@@ -58,6 +64,7 @@
     <div id="gpio-badge" class="badge">GPIO Pin 17: Normal</div>
   </section>
 
+  <!-- MAIN HEADER -->
   <section class="topline">
     <div>
       <div class="tag">Thuzhayan Telemetry System</div>
@@ -66,99 +73,186 @@
     <div id="state" class="state">Connecting hardware…</div>
   </section>
 
-  <section class="water" aria-label="Animated water crest showing boat & paddler motion">
-    <div class="live-tag">LIVE SENSORS & DUAL PADDLER ANIMATION</div>
-    
-    <!-- SVG Interactive Racing Shell & Dual Paddler Animation -->
-    <div id="boat-container" class="boat-graphic">
-      <svg id="paddling-svg" viewBox="0 0 450 160" width="380" height="135">
-        <defs>
-          <linearGradient id="hull-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stop-color="#046b8c" />
-            <stop offset="50%" stop-color="#43c5db" />
-            <stop offset="100%" stop-color="#83e8ff" />
-          </linearGradient>
-          <linearGradient id="oar-grad" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stop-color="#ffb830" />
-            <stop offset="100%" stop-color="#ff4d4d" />
-          </linearGradient>
-        </defs>
+  <!-- ============================================================== -->
+  <!-- SECTION 1: BOAT TELEMETRY (SHOWN FIRST AT THE TOP)             -->
+  <!-- ============================================================== -->
+  <section class="telemetry-section" id="section-boat">
+    <div class="section-header">
+      <div class="section-title">
+        <span>🚤</span> BOAT TELEMETRY & NAVIGATIONAL STACK
+      </div>
+      <div class="section-subtitle">MAVLink Flight Controller (Tailscale HTTP)</div>
+    </div>
 
-        <!-- Racing Shell Hull -->
-        <path d="M 20 95 Q 220 120 430 95 Q 220 108 20 95 Z" fill="url(#hull-grad)" stroke="#ffffff" stroke-width="1.5" />
-        <path d="M 40 95 Q 220 104 410 95" fill="none" stroke="rgba(255,255,255,0.4)" stroke-dasharray="4 2" />
-
-        <!-- Paddler 2 (Stern / Rear rower) -->
-        <g id="paddler-2" transform="translate(130, 60)">
-          <!-- Rower Body & Head -->
-          <circle cx="0" cy="-12" r="10" fill="#9beec3" stroke="#061827" stroke-width="1.5" />
-          <path d="M -8 0 Q 0 -5 12 -2 L 14 26 L -6 26 Z" fill="#43c5db" />
-          <!-- Oar Assembly -->
-          <g id="oar-group-2" transform="translate(4, 12)">
-            <line x1="-12" y1="-8" x2="42" y2="45" stroke="#ffb830" stroke-width="4.5" stroke-linecap="round" />
-            <path d="M 38 42 L 54 56 Q 50 62 40 54 Z" fill="url(#oar-grad)" />
-            <!-- Water Splash Ring -->
-            <ellipse id="splash-2" cx="48" cy="52" rx="14" ry="4" fill="none" stroke="#83e8ff" stroke-width="2" opacity="0" />
-          </g>
-        </g>
-
-        <!-- Paddler 1 (Bow / Front rower) -->
-        <g id="paddler-1" transform="translate(290, 60)">
-          <!-- Rower Body & Head -->
-          <circle cx="0" cy="-12" r="10" fill="#83e8ff" stroke="#061827" stroke-width="1.5" />
-          <path d="M -8 0 Q 0 -5 12 -2 L 14 26 L -6 26 Z" fill="#0d8bb0" />
-          <!-- Oar Assembly -->
-          <g id="oar-group-1" transform="translate(4, 12)">
-            <line x1="-12" y1="-8" x2="42" y2="45" stroke="#ffb830" stroke-width="4.5" stroke-linecap="round" />
-            <path d="M 38 42 L 54 56 Q 50 62 40 54 Z" fill="url(#oar-grad)" />
-            <!-- Water Splash Ring -->
-            <ellipse id="splash-1" cx="48" cy="52" rx="14" ry="4" fill="none" stroke="#83e8ff" stroke-width="2" opacity="0" />
-          </g>
-        </g>
-
-        <!-- Dynamic Bow Wave Spray -->
-        <path id="bow-spray" d="M 425 96 Q 440 92 448 97 Q 436 102 425 96 Z" fill="#83e8ff" opacity="0.8" />
+    <!-- Hydrodynamic Speed-Animated Crest Visualizer -->
+    <div class="water-box" aria-label="Animated water crest showing boat motion">
+      <div class="live-tag">LIVE FC SPEED & CREST WAVE GRAPHIC</div>
+      <svg class="waves" viewBox="0 0 1000 260" preserveAspectRatio="none" aria-hidden="true">
+        <path id="wave-back" fill="#0d8bb0" opacity=".62"></path>
+        <path id="wave-front" fill="#43c5db" opacity=".78"></path>
       </svg>
     </div>
 
-    <svg viewBox="0 0 1000 260" preserveAspectRatio="none" aria-hidden="true">
-      <path id="wave-back" fill="#0d8bb0" opacity=".62"></path>
-      <path id="wave-front" fill="#43c5db" opacity=".78"></path>
-    </svg>
+    <!-- Boat Specific Metrics Grid -->
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <small>Boat Speed</small>
+        <strong id="speed" style="color: #83e8ff;">—</strong>
+        <div id="speed-knots" class="sub-value">— knots</div>
+      </div>
+      <div class="metric-card">
+        <small>Split 500m Pace</small>
+        <strong id="split-500m" style="color: #9beec3;">—</strong>
+        <div class="sub-value">Pace / 500 meters</div>
+      </div>
+      <div class="metric-card">
+        <small>Distance / Stroke</small>
+        <strong id="dps-m">—</strong>
+        <div class="sub-value">Meters per stroke</div>
+      </div>
+      <div class="metric-card">
+        <small>Course / Heading</small>
+        <strong id="heading">—</strong>
+        <div class="sub-value">GPS Track / Compass</div>
+      </div>
+      <div class="metric-card">
+        <small>Drift Angle</small>
+        <strong id="drift">—</strong>
+        <div class="sub-value">Leeway deviation</div>
+      </div>
+      <div class="metric-card">
+        <small>Hull Trim (Roll/Pitch)</small>
+        <strong id="trim">—</strong>
+        <div class="sub-value">Roll trim & Pitch trim</div>
+      </div>
+      <div class="metric-card">
+        <small>Yaw Stability</small>
+        <strong id="yaw">—</strong>
+        <div class="sub-value">10s Oscillation (°/s)</div>
+      </div>
+    </div>
   </section>
 
-  <section class="metrics">
-    <div class="metric"><small>Boat Speed</small><strong id="speed">—</strong></div>
-    <div class="metric"><small>Split 500m Pace</small><strong id="split-500m" style="color:#83e8ff;">—</strong></div>
-    <div class="metric"><small>Paddler Synchronization</small><strong id="sync-score" style="color:#9beec3;">—</strong></div>
-    <div class="metric"><small>Distance Per Stroke</small><strong id="dps-m">—</strong></div>
-    <div class="metric"><small>Yaw Stability</small><strong id="yaw">—</strong></div>
-    <div class="metric"><small>Course / Heading</small><strong id="heading">—</strong></div>
-    <div class="metric"><small>Drift Angle</small><strong id="drift">—</strong></div>
-    <div class="metric"><small>Hull Roll / Pitch</small><strong id="trim">—</strong></div>
-    <div class="metric"><small>Paddler 1 vs 2 SPM</small><strong id="paddle-spm">—</strong></div>
-    <div class="metric"><small>Paddle Peak Accel</small><strong id="paddle-accel">—</strong></div>
+  <!-- ============================================================== -->
+  <!-- SECTION 2: PADDLER TELEMETRY & CREW SYNCHRONIZATION (BELOW)    -->
+  <!-- ============================================================== -->
+  <section class="telemetry-section" id="section-paddler">
+    <div class="section-header">
+      <div class="section-title">
+        <span>🚣</span> PADDLER TELEMETRY & CREW SYNCHRONIZATION
+      </div>
+      <div class="section-subtitle">Accelerometer & Gyroscope Sensor Network</div>
+    </div>
+
+    <!-- Dual Paddler Racing Shell Visualizer with Rotating Oars & Side Switch -->
+    <div class="water-box" aria-label="Animated dual paddler racing shell">
+      <div class="live-tag">LIVE DUAL PADDLER OAR SWEEP & SIDE SWITCH</div>
+      
+      <div id="boat-container" class="boat-graphic">
+        <svg id="paddling-svg" viewBox="0 0 450 160" width="380" height="135">
+          <defs>
+            <linearGradient id="hull-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#046b8c" />
+              <stop offset="50%" stop-color="#43c5db" />
+              <stop offset="100%" stop-color="#83e8ff" />
+            </linearGradient>
+            <linearGradient id="oar-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#ffb830" />
+              <stop offset="100%" stop-color="#ff4d4d" />
+            </linearGradient>
+          </defs>
+
+          <!-- Racing Shell Hull -->
+          <path d="M 20 95 Q 220 120 430 95 Q 220 108 20 95 Z" fill="url(#hull-grad)" stroke="#ffffff" stroke-width="1.5" />
+          <path d="M 40 95 Q 220 104 410 95" fill="none" stroke="rgba(255,255,255,0.4)" stroke-dasharray="4 2" />
+
+          <!-- Paddler 2 (Stern / Rear rower) -->
+          <g id="paddler-2" transform="translate(130, 60)">
+            <circle cx="0" cy="-12" r="10" fill="#9beec3" stroke="#061827" stroke-width="1.5" />
+            <path d="M -8 0 Q 0 -5 12 -2 L 14 26 L -6 26 Z" fill="#43c5db" />
+            <g id="oar-group-2" transform="translate(4, 12)">
+              <line x1="-12" y1="-8" x2="42" y2="45" stroke="#ffb830" stroke-width="4.5" stroke-linecap="round" />
+              <path d="M 38 42 L 54 56 Q 50 62 40 54 Z" fill="url(#oar-grad)" />
+              <ellipse id="splash-2" cx="48" cy="52" rx="14" ry="4" fill="none" stroke="#83e8ff" stroke-width="2" opacity="0" />
+            </g>
+          </g>
+
+          <!-- Paddler 1 (Bow / Front rower) -->
+          <g id="paddler-1" transform="translate(290, 60)">
+            <circle cx="0" cy="-12" r="10" fill="#83e8ff" stroke="#061827" stroke-width="1.5" />
+            <path d="M -8 0 Q 0 -5 12 -2 L 14 26 L -6 26 Z" fill="#0d8bb0" />
+            <g id="oar-group-1" transform="translate(4, 12)">
+              <line x1="-12" y1="-8" x2="42" y2="45" stroke="#ffb830" stroke-width="4.5" stroke-linecap="round" />
+              <path d="M 38 42 L 54 56 Q 50 62 40 54 Z" fill="url(#oar-grad)" />
+              <ellipse id="splash-1" cx="48" cy="52" rx="14" ry="4" fill="none" stroke="#83e8ff" stroke-width="2" opacity="0" />
+            </g>
+          </g>
+
+          <!-- Dynamic Bow Wave Spray -->
+          <path id="bow-spray" d="M 425 96 Q 440 92 448 97 Q 436 102 425 96 Z" fill="#83e8ff" opacity="0.8" />
+        </svg>
+      </div>
+    </div>
+
+    <!-- Paddler Specific Metrics Grid -->
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <small>Crew Sync Score</small>
+        <strong id="sync-score" style="color:#9beec3;">—</strong>
+        <div class="sub-value">Alignment percentage</div>
+      </div>
+      <div class="metric-card">
+        <small>Avg Stroke Rate</small>
+        <strong id="avg-spm" style="color:#83e8ff;">—</strong>
+        <div class="sub-value">Strokes Per Minute</div>
+      </div>
+      <div class="metric-card">
+        <small>Paddler 1 (Bow)</small>
+        <strong id="p1-info">—</strong>
+        <div id="p1-sub" class="sub-value">SPM & Side</div>
+      </div>
+      <div class="metric-card">
+        <small>Paddler 2 (Stern)</small>
+        <strong id="p2-info">—</strong>
+        <div id="p2-sub" class="sub-value">SPM & Side</div>
+      </div>
+      <div class="metric-card">
+        <small>Cadence Delta</small>
+        <strong id="spm-delta">—</strong>
+        <div class="sub-value">Rhythm difference</div>
+      </div>
+      <div class="metric-card">
+        <small>Peak Accel (g)</small>
+        <strong id="paddle-accel">—</strong>
+        <div class="sub-value">Drive force magnitude</div>
+      </div>
+    </div>
   </section>
 
-  <section class="tabs">
-    <button class="tab-btn active" onclick="switchTab('gemma-tab')">🤖 Local Gemma Edge Coach</button>
-    <button class="tab-btn" onclick="switchTab('gemini-tab')">☁️ Cloud Gemini Report</button>
-    <button class="tab-btn" onclick="switchTab('report-tab')">📋 Telemetry Session Log</button>
+  <!-- ============================================================== -->
+  <!-- SECTION 3: PHYSICAL AI COACHING & ANALYTICS                    -->
+  <!-- ============================================================== -->
+  <section class="telemetry-section" id="section-ai">
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('gemma-tab')">🤖 Local Gemma Edge Coach</button>
+      <button class="tab-btn" onclick="switchTab('gemini-tab')">☁️ Cloud Gemini Report</button>
+      <button class="tab-btn" onclick="switchTab('report-tab')">📋 Telemetry Session Log</button>
+    </div>
+
+    <div id="gemma-tab" class="tab-content active">
+      <div style="font-weight:800; color:#83e8ff; margin-bottom:8px; font-size:1.05rem;">Real-Time Physical AI Tactical Coach (Gemma Edge Inference on RPi 5):</div>
+      <div id="gemma-advice" style="font-size: 1rem; color: #e8f5fb; white-space: pre-wrap;">Initializing Gemma model edge advisor...</div>
+    </div>
+
+    <div id="gemini-tab" class="tab-content">
+      <button class="btn-action" onclick="fetchGeminiReport()">Run Deep Cloud Gemini Analysis</button>
+      <div id="gemini-report" style="white-space: pre-wrap; font-size: 0.95rem;">Click the button above to execute deep hydrodynamic performance analysis with Google Cloud Gemini.</div>
+    </div>
+
+    <div id="report-tab" class="tab-content">
+      <pre id="report" style="margin:0; font-family: monospace; font-size: 0.88rem; overflow-x: auto;">Loading session report...</pre>
+    </div>
   </section>
-
-  <div id="gemma-tab" class="tab-content active">
-    <div style="font-weight:700; color:#83e8ff; margin-bottom:8px;">Real-Time Physical AI Coaching (Gemma Edge Inference on RPi 5):</div>
-    <div id="gemma-advice">Initializing Gemma model edge advisor...</div>
-  </div>
-
-  <div id="gemini-tab" class="tab-content">
-    <button class="btn-action" onclick="fetchGeminiReport()">Run Deep Cloud Gemini Analysis</button>
-    <div id="gemini-report">Click the button above to execute deep hydrodynamic performance analysis with Google Cloud Gemini.</div>
-  </div>
-
-  <div id="report-tab" class="tab-content">
-    <pre id="report" style="margin:0; font-family:inherit;">Loading session report...</pre>
-  </div>
 
   <script>
     function switchTab(tabId) {
@@ -211,49 +305,41 @@
         const yawStab = Number(telemetry.yaw_stability_10s_dps || 0);
 
         // 1. BOAT TELEMETRY WATER CREST ANIMATION:
-        // Wave scroll speed scales dynamically with Flight Controller speed_kmh
         const energy = Math.min(42, 8 + boatSpeed * 2.8 + yawStab * 6);
         phase += 0.015 + (boatSpeed * 0.012);
         
         $('wave-back').setAttribute('d', wave(phase * 0.7, energy * 0.68, 165));
         $('wave-front').setAttribute('d', wave(phase, energy, 184));
 
-        // Dynamic Bow Wave Spray Intensity
         const spray = $('bow-spray');
         if (spray) {
           spray.setAttribute('opacity', Math.min(1.0, 0.2 + (boatSpeed / 6.0)).toFixed(2));
         }
 
         // 2. PADDLE ROTATING ANIMATION:
-        // Rotation speed and sweep angle scale directly with Accelerometer Magnitude (peak_accel_g) & SPM
         const spm = Math.max(10, Number(paddleData.stroke_rate_spm || 30.0));
         const accelG1 = Number(paddleData.paddler_1?.accel_g || paddleData.peak_accel_g || 1.05);
         const accelG2 = Number(paddleData.paddler_2?.accel_g || paddleData.peak_accel_g || 1.05);
         const syncPct = Number(paddleData.sync_percentage || 95.0);
 
-        // Angular velocity driven by IMU Accelerometer force
         const strokeSpeed1 = (spm / 60.0) * (0.08 + (accelG1 * 0.045));
         strokePhase1 += strokeSpeed1;
 
-        // Introduce synchronization phase lag for Paddler 2
         const phaseLag = (100.0 - syncPct) * 0.035;
         strokePhase2 = strokePhase1 - phaseLag;
 
-        // Oar Rotation Sweep Angle (scales with accel g)
         const sweepAmp1 = Math.min(32, 16 + (accelG1 * 6.5));
         const sweepAmp2 = Math.min(32, 16 + (accelG2 * 6.5));
 
         const angle1 = Math.sin(strokePhase1 * Math.PI * 2) * sweepAmp1;
         const angle2 = Math.sin(strokePhase2 * Math.PI * 2) * sweepAmp2;
 
-        // 3. PADDLING SIDE SWITCH OAR FLIP:
         const side1 = paddleData.paddler_1?.side || "STARBOARD";
         const side2 = paddleData.paddler_2?.side || "PORT";
 
         const oar1 = $('oar-group-1');
         const oar2 = $('oar-group-2');
 
-        // Apply dynamic rotation and handle side-flip (Port side inverts stroke angle)
         if (oar1) {
           const dir1 = (side1 === "PORT") ? -1 : 1;
           oar1.setAttribute('transform', `translate(4, 12) rotate(${(angle1 * dir1).toFixed(1)})`);
@@ -263,7 +349,6 @@
           oar2.setAttribute('transform', `translate(4, 12) rotate(${(angle2 * dir2).toFixed(1)})`);
         }
 
-        // Water Splash Flare when blade dips into water
         const splash1 = $('splash-1');
         const splash2 = $('splash-2');
         if (splash1) splash1.setAttribute('opacity', Math.abs(angle1) > 10 ? (Math.abs(angle1) - 10) / 14 : 0);
@@ -276,10 +361,12 @@
         if (data.state === 'waiting') return;
         telemetry = data;
         const speed = Number(data.speed_kmh || 0);
+        const speedKnots = speed * 0.539957;
+
         $('state').textContent = data.gps_healthy ? (speed < .72 ? 'Stationary' : 'Moving') : 'GPS Acquiring';
         $('speed').textContent = format(data.speed_kmh, ' km/h');
-        
-        // Calculate Split 500m pace
+        $('speed-knots').textContent = `${speedKnots.toFixed(1)} knots`;
+
         if (speed > 0.1) {
           const splitSecs = 500.0 / (speed / 3.6);
           const m = Math.floor(splitSecs / 60);
@@ -309,15 +396,27 @@
         paddleData = data;
         
         const syncPct = data.sync_percentage ?? 95.0;
-        $('sync-score').textContent = `${Number(syncPct).toFixed(1)}% Sync`;
+        $('sync-score').textContent = `${Number(syncPct).toFixed(1)}%`;
 
         const spm = Number(data.stroke_rate_spm || 0);
+        $('avg-spm').textContent = format(spm, ' SPM');
+
         const p1Spm = data.paddler_1 ? data.paddler_1.spm : spm;
         const p2Spm = data.paddler_2 ? data.paddler_2.spm : spm;
         const p1Side = data.paddler_1 ? data.paddler_1.side : "STARBOARD";
         const p2Side = data.paddler_2 ? data.paddler_2.side : "PORT";
+        const p1Accel = data.paddler_1 ? data.paddler_1.accel_g : (data.peak_accel_g || 1.0);
+        const p2Accel = data.paddler_2 ? data.paddler_2.accel_g : (data.peak_accel_g || 1.0);
 
-        $('paddle-spm').textContent = `P1: ${p1Spm} (${p1Side}) | P2: ${p2Spm} (${p2Side})`;
+        $('p1-info').textContent = `${p1Spm} SPM`;
+        $('p1-sub').textContent = `${p1Side} (${p1Accel.toFixed(2)}g)`;
+
+        $('p2-info').textContent = `${p2Spm} SPM`;
+        $('p2-sub').textContent = `${p2Side} (${p2Accel.toFixed(2)}g)`;
+
+        const spmDelta = data.spm_delta ?? Math.abs(p1Spm - p2Spm);
+        $('spm-delta').textContent = `${Number(spmDelta).toFixed(1)} SPM`;
+
         $('paddle-accel').textContent = format(data.peak_accel_g, ' g');
 
         // Distance per stroke (DPS)
@@ -326,15 +425,7 @@
           const dps = ((speed / 3.6) * 60.0) / spm;
           $('dps-m').textContent = `${dps.toFixed(2)} m/stroke`;
         } else {
-          $('dps-m').textContent = '—';
-        }
-
-        // Hardware Sync Traffic Light System Evaluation (GREEN >= 85%, YELLOW 70-84.9%, RED < 70%)
-        let status = data.sync_light_status;
-        if (!status) {
-          if (syncPct >= 85.0) status = 'GREEN';
-          else if (syncPct >= 70.0) status = 'YELLOW';
-          else status = 'RED';
+          $('dps-m').textContent = '— m/stroke';
         }
 
         const syncBadge = $('sync-badge');
