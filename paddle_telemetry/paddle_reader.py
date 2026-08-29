@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Paddle telemetry service: continuously reads dual physical paddler sensors (http://192.168.11.219/ and Paddler-2) and computes sync & efficiency."""
+"""Paddle telemetry service: continuously reads dual physical paddler sensors and computes sync & efficiency.
+
+Paddler 1: http://192.168.11.240/  (PADDLER-1)
+Paddler 2: http://192.168.11.219/  (PADDLER-2)
+
+Sensors stream a continuous JSON array of IMU readings at ~100Hz.
+Each reading contains: accel_magnitude_g, orientation_deg (roll/pitch/yaw), gyro_dps, temp_c, etc.
+"""
 
 import argparse
 import json
@@ -12,12 +19,41 @@ import urllib.error
 from pathlib import Path
 
 
-def fetch_http_paddle(url: str, timeout: float = 1.8) -> dict | None:
+def fetch_http_paddle(url: str, timeout: float = 2.5) -> dict | None:
+    """Fetch the latest IMU reading from a paddle sensor streaming endpoint.
+
+    The sensors stream a continuous JSON array at ~100Hz — the connection
+    never closes. We open an HTTP connection, read a fixed byte chunk
+    containing recent readings, then forcibly close the socket.
+    """
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "ThuzhayanPaddleReader/1.0"})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            raw = resp.read().decode("utf-8").strip()
-            return json.loads(raw)
+        resp = urllib.request.urlopen(req, timeout=timeout)
+        try:
+            chunk = resp.read(8192).decode("utf-8", errors="replace").strip()
+        finally:
+            resp.close()
+
+        # The chunk looks like: [{...},{...},{...},...  (continuous array, never closed)
+        chunk = chunk.lstrip("[")
+
+        # Split into individual JSON object strings
+        parts = chunk.split("},{")
+        if not parts:
+            return None
+
+        # Take the last *complete* object
+        for candidate in reversed(parts):
+            candidate = candidate.strip().rstrip(",").rstrip("]")
+            if not candidate.startswith("{"):
+                candidate = "{" + candidate
+            if not candidate.endswith("}"):
+                candidate = candidate + "}"
+            try:
+                return json.loads(candidate)
+            except json.JSONDecodeError:
+                continue
+        return None
     except Exception:
         return None
 
@@ -50,8 +86,8 @@ def detect_paddling_side(roll_deg: float, prev_side: str) -> tuple[str, bool]:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--url1", default="http://192.168.11.219/", help="HTTP endpoint for Paddler 1 hardware")
-    parser.add_argument("--url2", default="http://192.168.11.220/", help="HTTP endpoint for Paddler 2 hardware")
+    parser.add_argument("--url1", default="http://192.168.11.240/", help="HTTP endpoint for Paddler 1 hardware")
+    parser.add_argument("--url2", default="http://192.168.11.219/", help="HTTP endpoint for Paddler 2 hardware")
     parser.add_argument("--port", default="/dev/ttyUSB1", help="Serial port for paddle sensor hub")
     parser.add_argument("--output", default="data/paddle-telemetry.jsonl")
     parser.add_argument("--simulate", action="store_true", help="Generate simulated paddle events if hardware is disconnected")
@@ -112,7 +148,7 @@ def main() -> None:
                     "paddler_1": {
                         "paddle_id": 1,
                         "device_name": "PADDLER-1",
-                        "ip": "192.168.11.219",
+                        "ip": "192.168.11.240",
                         "spm": spm1,
                         "accel_g": accel1,
                         "roll_deg": sim_roll1,
@@ -125,7 +161,7 @@ def main() -> None:
                     "paddler_2": {
                         "paddle_id": 2,
                         "device_name": "PADDLER-2",
-                        "ip": "192.168.11.220",
+                        "ip": "192.168.11.219",
                         "spm": spm2,
                         "accel_g": accel2,
                         "roll_deg": sim_roll2,
@@ -169,6 +205,7 @@ def main() -> None:
                     temp1 = round(data1.get("temp_c", 0.0), 1)
                 else:
                     spm1, accel1, roll1, pitch1, temp1 = 30.0, 1.05, 4.5, 0.0, 28.0
+                    print("  [P1] Paddler 1 sensor offline (192.168.11.240)")
 
                 # Detect Paddling Side for Paddler 1
                 paddler_1_side, side_switch_1 = detect_paddling_side(roll1, paddler_1_side)
@@ -219,7 +256,7 @@ def main() -> None:
                     "paddler_1": {
                         "paddle_id": 1,
                         "device_name": data1.get("device_name", "PADDLER-1") if data1 else "PADDLER-1",
-                        "ip": data1.get("ip", "192.168.11.219") if data1 else "192.168.11.219",
+                        "ip": data1.get("ip", "192.168.11.240") if data1 else "192.168.11.240",
                         "spm": spm1,
                         "accel_g": round(accel1, 3),
                         "roll_deg": roll1,
@@ -232,7 +269,7 @@ def main() -> None:
                     "paddler_2": {
                         "paddle_id": 2,
                         "device_name": data2.get("device_name", "PADDLER-2") if data2 else "PADDLER-2",
-                        "ip": data2.get("ip", "192.168.11.220") if data2 else "192.168.11.220",
+                        "ip": data2.get("ip", "192.168.11.219") if data2 else "192.168.11.219",
                         "spm": spm2,
                         "accel_g": round(accel2, 3),
                         "roll_deg": roll2,
@@ -247,7 +284,8 @@ def main() -> None:
                 log.flush()
                 print(
                     f"[DUAL PADDLE] Sync: {sync_pct}% | Avg SPM: {avg_spm} | "
-                    f"P1 (192.168.11.219): {spm1} SPM ({accel1:.2f}g) | P2: {spm2} SPM ({accel2:.2f}g)"
+                    f"P1 (.240): {spm1} SPM ({accel1:.2f}g) [{paddler_1_side}] | "
+                    f"P2 (.219): {spm2} SPM ({accel2:.2f}g) [{paddler_2_side}]"
                 )
                 time.sleep(0.8)
 
