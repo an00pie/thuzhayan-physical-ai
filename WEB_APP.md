@@ -5,10 +5,10 @@ plots raw acceleration magnitude, detects troughs, and measures the time between
 them. It also retains the optional flight-controller distance graph and mock mode.
 
 The root route (`/`) is the simplified mobile crew display. The complete graphing
-and diagnostics workspace is available at `/debug`. A touch-friendly live Three.js
-boat and crew view is available at `/visual`.
+and diagnostics workspace is available at `/telemetry`. The physical-ai visualization
+is available at `/visualization`; the live Three.js boat and crew view remains at `/visual`.
 
-The THUZHAYAN Physical AI dashboard is available at `/telemetry`. Its
+The THUZHAYAN Physical AI dashboard is available at `/visualization`. Its
 compatibility API is implemented by the Express server under
 `/api/telemetry/*` and
 reuses `ACCELEROMETER_ENDPOINT_URL`, `FC_ENDPOINT_URL`, `OLLAMA_BASE_URL`, and

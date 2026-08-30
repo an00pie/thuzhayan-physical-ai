@@ -7,6 +7,8 @@ const config = {
   fcUrl: import.meta.env.VITE_FC_ENDPOINT_URL || "",
   mock: String(import.meta.env.VITE_USE_MOCK_DATA || "false").toLowerCase() === "true",
   maxPoints: Number(import.meta.env.VITE_MAX_POINTS || 300),
+  boatMassKg: Number(import.meta.env.VITE_BOAT_MASS_KG || 100),
+  driveAccelerationThreshold: Number(import.meta.env.VITE_DRIVE_ACCELERATION_THRESHOLD_G || 0.035),
   paddles: Number(import.meta.env.VITE_MOCK_PADDLE_COUNT || 3),
   minTroughDistance: Number(import.meta.env.VITE_TROUGH_MIN_DISTANCE_SECONDS || 0.6),
   // Allow normal timing variation between paddlers before considering strokes unmatched.
@@ -30,6 +32,7 @@ const state = {
   fcAccelBaseline: null,
   fcThrustTotal: 0,
   fcThrust: [],
+  fcDrive: [],
   timer: null,
   startedAt: performance.now(),
   startedWallClock: new Date().toISOString(),
@@ -50,35 +53,21 @@ const debugView = `
         <div><p class="section-number">LIVE / OUTPUT</p><h2>Telemetry workspace</h2></div>
         <div class="stream-controls">
           <div class="connection"><span id="connection-dot"></span><span id="connection-label">Waiting</span></div>
+          <div class="score"><strong id="match-score">—</strong><span>MATCH</span></div>
           <button id="pause">Pause stream</button>
+          <button id="export-logs" type="button">Export logs</button>
         </div>
       </div>
       <section class="metrics" id="metrics"></section>
       <div class="graphs">
+        <article class="panel fc-drive-panel" id="fc-drive-panel">
+          <div class="panel-heading"><div><p class="kicker">FLIGHT CONTROLLER / DRIVE PHASE</p><h3>Rowing force & boat speed</h3></div><span>FORCE / N · SPEED / M/S</span></div>
+          <svg id="fc-drive-chart" role="img" aria-label="Estimated rowing force during drive phases and boat speed over time"></svg>
+        </article>
         <article class="panel" id="pad-panel">
           <div class="panel-heading"><div><p class="kicker">ACCELEROMETER</p><h3>Acceleration & stroke periods</h3></div><span>MAGNITUDE / G</span></div>
           <svg id="pad-chart" role="img" aria-label="Paddle acceleration chart"></svg>
           <div class="legend" id="legend"></div>
-        </article>
-        <article class="panel raw-pad-panel" id="raw-pad-panel">
-          <div class="panel-heading"><div><p class="kicker">PADDLE TELEMETRY / RAW</p><h3>All paddle channels</h3></div><span>ACCEL + GYRO</span></div>
-          <svg id="pad-raw-chart" role="img" aria-label="Raw acceleration and gyroscope channels for every paddle"></svg>
-        </article>
-        <article class="panel interval-panel" id="interval-panel">
-          <div class="panel-heading">
-            <div><p class="kicker">RHYTHM COMPARISON</p><h3>Trough timestamp alignment</h3></div>
-            <div class="score"><strong id="match-score">—</strong><span>MATCH</span></div>
-          </div>
-          <svg id="interval-chart" role="img" aria-label="Paddle trough timestamp alignment chart"></svg>
-          <p class="chart-note" id="match-note">Waiting for troughs from at least two paddles.</p>
-        </article>
-        <article class="panel" id="fc-panel">
-          <div class="panel-heading"><div><p class="kicker">FLIGHT CONTROLLER</p><h3>Estimated motion distance</h3></div><span>ACCELEROMETER / METRES</span></div>
-          <svg id="fc-chart" role="img" aria-label="Accelerometer-estimated distance chart"></svg>
-        </article>
-        <article class="panel" id="fc-thrust-panel">
-          <div class="panel-heading"><div><p class="kicker">FLIGHT CONTROLLER / WAVE MODEL</p><h3>Wave-adjusted thrust</h3></div><span id="fc-thrust-total">—</span></div>
-          <svg id="fc-thrust-chart" role="img" aria-label="Movement speed over gyro-derived wave angle with cumulative thrust proxy"></svg>
         </article>
         <article class="panel fc-attributes-panel" id="fc-attributes-panel">
           <div class="panel-heading"><div><p class="kicker">FLIGHT CONTROLLER / RAW</p><h3>All FC attributes</h3></div><span>INDIVIDUAL SCALES</span></div>
@@ -118,7 +107,7 @@ const visualView = `
     </section>
     <div class="visual-footer">
       <span id="visual-status">Waiting for paddlers</span>
-      <nav><a href="/">Crew</a><a href="/debug">Debug</a></nav>
+      <nav><a href="/">Crew</a><a href="/telemetry">Telemetry</a></nav>
     </div>
     <p class="error" id="error"></p>
   </main>
@@ -150,7 +139,7 @@ const reportView = `
 `;
 
 const currentRoute = window.location.pathname.replace(/\/$/, "");
-const isDebugView = currentRoute === "/debug";
+const isDebugView = currentRoute === "/telemetry";
 const isVisualView = currentRoute === "/visual";
 const isReportView = currentRoute === "/report";
 document.querySelector("#app").innerHTML = isDebugView
@@ -162,16 +151,18 @@ document.querySelector("#app").innerHTML = isDebugView
       : mobileView;
 
 const elements = {
-  padPanel: document.querySelector("#pad-panel"), fcPanel: document.querySelector("#fc-panel"),
+  padPanel: document.querySelector("#pad-panel"), fcPanel: document.querySelector("#fc-panel"), fcDrivePanel: document.querySelector("#fc-drive-panel"),
   padChart: document.querySelector("#pad-chart"), fcChart: document.querySelector("#fc-chart"),
   padRawChart: document.querySelector("#pad-raw-chart"),
   fcThrustChart: document.querySelector("#fc-thrust-chart"), fcThrustTotal: document.querySelector("#fc-thrust-total"),
+  fcDriveChart: document.querySelector("#fc-drive-chart"),
   fcAttributesPanel: document.querySelector("#fc-attributes-panel"),
   fcAttributesChart: document.querySelector("#fc-attributes-chart"),
   intervalChart: document.querySelector("#interval-chart"),
   metrics: document.querySelector("#metrics"), legend: document.querySelector("#legend"),
   error: document.querySelector("#error"), dot: document.querySelector("#connection-dot"),
   connection: document.querySelector("#connection-label"), pause: document.querySelector("#pause"),
+  exportLogs: document.querySelector("#export-logs"),
   matchScore: document.querySelector("#match-score"), matchNote: document.querySelector("#match-note"),
   fcSummary: document.querySelector("#fc-summary"),
   reportButton: document.querySelector("#make-report"), reportStatus: document.querySelector("#report-status"),
@@ -188,6 +179,7 @@ const elements = {
 
 if (elements.padPanel) elements.padPanel.hidden = !config.mock && !config.padUrls.length;
 if (elements.fcPanel) elements.fcPanel.hidden = !config.mock && !config.fcUrl;
+if (elements.fcDrivePanel) elements.fcDrivePanel.hidden = !config.mock && !config.fcUrl;
 if (elements.fcAttributesPanel) elements.fcAttributesPanel.hidden = !config.mock && !config.fcUrl;
 function paddlerId(event) {
   const id = event?.paddler_id ?? event?.device_id;
@@ -312,6 +304,13 @@ function addFcMessages(messages) {
         if (delta > 0 && delta <= 2) state.fcThrustTotal += Math.abs(speed * wave) * delta;
       }
       state.fcThrust.push({ time, speed, wave, waveAngle: gyroAngle, thrust: state.fcThrustTotal });
+      const drive = deltaG >= config.driveAccelerationThreshold;
+      state.fcDrive.push({
+        time,
+        speed: Math.max(0, speed || 0),
+        force: drive ? deltaG * 9.80665 * Math.max(1, config.boatMassKg) : 0,
+        drive,
+      });
     } else {
       speed = Math.hypot(Number(item.vx), Number(item.vy), Number(item.vz)) / 100;
       if (state.previousFcTime !== null) {
@@ -324,6 +323,7 @@ function addFcMessages(messages) {
   }
   if (state.fc.length > config.maxPoints) state.fc.splice(0, state.fc.length - config.maxPoints);
   if (state.fcThrust.length > config.maxPoints) state.fcThrust.splice(0, state.fcThrust.length - config.maxPoints);
+  if (state.fcDrive.length > config.maxPoints) state.fcDrive.splice(0, state.fcDrive.length - config.maxPoints);
 }
 
 function troughs(points) {
@@ -828,46 +828,47 @@ function drawChart(svg, seriesList, { troughMarkers = false } = {}) {
 
 function drawFcAttributes(svg) {
   svg.replaceChildren();
-  const rows = [
-    ["Roll", "roll", "°"], ["Pitch", "pitch", "°"], ["Yaw", "yaw", "°"], ["Compass", "compass", "°"],
-    ["Accel X", "accel_x", "g"], ["Accel Y", "accel_y", "g"], ["Accel Z", "accel_z", "g"], ["Accel |v|", "accel_magnitude", "g"],
-    ["Gyro X", "gyro_x", "°/s"], ["Gyro Y", "gyro_y", "°/s"], ["Gyro Z", "gyro_z", "°/s"], ["Gyro |v|", "gyro_magnitude", "°/s"],
-    ["GPS speed", "gps_speed", "m/s"], ["GPS altitude", "gps_altitude", "m"], ["Latitude", "latitude", "°"], ["Longitude", "longitude", "°"],
-    ["Satellites", "gps_satellites", ""], ["GPS fix", "gps_fix", ""],
-    ["Battery", "battery_voltage", "V"], ["Current", "battery_current", "A"], ["Battery %", "battery_percentage", "%"], ["Armed", "armed", "0/1"],
-  ];
-  const samples = state.fcTelemetry;
-  const width = svg.clientWidth || 1000;
-  const rowHeight = 34, top = 12, bottom = 28, left = 112, right = 82;
-  const height = top + rows.length * rowHeight + bottom;
+  const rows = [["Compass", "compass", "°"], ["Accel X", "accel_x", "g"], ["Accel Y", "accel_y", "g"], ["Accel Z", "accel_z", "g"], ["Accel |v|", "accel_magnitude", "g"], ["Gyro X", "gyro_x", "°/s"], ["Gyro Y", "gyro_y", "°/s"], ["Gyro Z", "gyro_z", "°/s"], ["Gyro |v|", "gyro_magnitude", "°/s"], ["GPS speed", "gps_speed", "m/s"], ["GPS altitude", "gps_altitude", "m"], ["Latitude", "latitude", "°"], ["Longitude", "longitude", "°"], ["Satellites", "gps_satellites", ""], ["GPS fix", "gps_fix", ""], ["Battery", "battery_voltage", "V"], ["Current", "battery_current", "A"], ["Battery %", "battery_percentage", "%"], ["Armed", "armed", "0/1"]];
+  const samples = state.fcTelemetry, width = svg.clientWidth || 1000, columns = width < 680 ? 2 : 4, gap = 9, tileWidth = (width - gap * (columns + 1)) / columns, tileHeight = 106, top = 132, height = top + Math.ceil(rows.length / columns) * (tileHeight + gap) + 10;
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
-  if (!samples.length) {
-    svg.append(svgNode("text", { x: width / 2, y: height / 2, class: "empty", "text-anchor": "middle" }, "Waiting for FC data…"));
-    return;
-  }
-  let minTime = Math.min(...samples.map((sample) => sample.time));
-  let maxTime = Math.max(...samples.map((sample) => sample.time));
-  if (minTime === maxTime) maxTime += 1;
-  const x = (time) => left + (time - minTime) / (maxTime - minTime) * (width - left - right);
-  rows.forEach(([label, key, unit], rowIndex) => {
-    const points = samples.filter((sample) => Number.isFinite(sample.values[key]));
-    const yTop = top + rowIndex * rowHeight, yBottom = yTop + rowHeight - 6;
-    svg.append(svgNode("line", { x1: left, y1: yBottom, x2: width - right, y2: yBottom, class: "grid" }));
-    svg.append(svgNode("text", { x: left - 9, y: yTop + 17, class: "axis-label", "text-anchor": "end" }, label));
-    if (!points.length) return;
-    let min = Math.min(...points.map((point) => point.values[key]));
-    let max = Math.max(...points.map((point) => point.values[key]));
-    if (min === max) { const pad = Math.max(Math.abs(min) * .05, .05); min -= pad; max += pad; }
-    const y = (value) => yBottom - 3 - (value - min) / (max - min) * (rowHeight - 12);
-    const path = points.map((point, index) => `${index ? "L" : "M"}${x(point.time).toFixed(1)},${y(point.values[key]).toFixed(1)}`).join(" ");
-    svg.append(svgNode("path", { d: path, fill: "none", stroke: colors[rowIndex % colors.length], class: "fc-line" }));
-    svg.append(svgNode("text", { x: width - right + 7, y: yTop + 12, class: "fc-range" }, `${max.toFixed(2)} ${unit}`));
-    svg.append(svgNode("text", { x: width - right + 7, y: yBottom, class: "fc-range" }, `${min.toFixed(2)} ${unit}`));
+  if (!samples.length) { svg.append(svgNode("text", { x: width / 2, y: height / 2, class: "empty", "text-anchor": "middle" }, "Waiting for FC data…")); return; }
+  // A combined attitude strip makes the relationship between roll, pitch and yaw visible at a glance.
+  const heroH = 108, heroY = 10, heroW = width - gap * 2;
+  svg.append(svgNode("rect", { x: gap, y: heroY, width: heroW, height: heroH, rx: 5, class: "fc-tile" }));
+  svg.append(svgNode("text", { x: gap + 10, y: heroY + 17, class: "fc-tile-label" }, "ATTITUDE / ROLL · PITCH · YAW"));
+  const latestValues = samples.at(-1).values, num = (key) => Number.isFinite(latestValues[key]) ? latestValues[key] : 0;
+  const acx = gap + 90, acy = heroY + 63;
+  svg.append(svgNode("circle", { cx: acx, cy: acy, r: 31, class: "fc-gauge-ring" }));
+  [["R", num("roll"), colors[0]], ["P", num("pitch"), colors[1]], ["Y", num("yaw"), colors[2]]].forEach(([label, angleValue, color], i) => { const angle = angleValue * Math.PI / 180 - Math.PI / 2, radius = 25 - i * 7; svg.append(svgNode("line", { x1: acx, y1: acy, x2: acx + Math.cos(angle) * radius, y2: acy + Math.sin(angle) * radius, stroke: color, class: "fc-gauge-needle" })); svg.append(svgNode("text", { x: acx + 48 + i * 75, y: heroY + 58, class: "fc-tile-value" }, `${label} ${angleValue.toFixed(1)}°`)); });
+  const attitudeHistory = samples.map((sample) => Math.hypot(sample.values.roll || 0, sample.values.pitch || 0, sample.values.yaw || 0));
+  const hx = gap + 320, hw = Math.max(80, heroW - 335), hmin = Math.min(...attitudeHistory), hmax = Math.max(...attitudeHistory), hspan = hmax === hmin ? 1 : hmax - hmin;
+  const hd = attitudeHistory.map((point, i) => `${i ? "L" : "M"}${hx + i / Math.max(1, attitudeHistory.length - 1) * hw},${heroY + 91 - (point - hmin) / hspan * 48}`).join(" ");
+  svg.append(svgNode("path", { d: hd, fill: "none", stroke: colors[3], class: "fc-sparkline" }));
+  svg.append(svgNode("text", { x: hx, y: heroY + 17, class: "fc-tile-label" }, "COMBINED ATTITUDE MAGNITUDE"));
+  rows.forEach(([label, key, unit], index) => {
+    const points = samples.map((sample) => sample.values[key]).filter((value) => Number.isFinite(value));
+    const x0 = gap + (index % columns) * (tileWidth + gap), y0 = top + Math.floor(index / columns) * (tileHeight + gap), color = colors[index % colors.length];
+    svg.append(svgNode("rect", { x: x0, y: y0, width: tileWidth, height: tileHeight, rx: 4, class: "fc-tile" }));
+    svg.append(svgNode("text", { x: x0 + 8, y: y0 + 17, class: "fc-tile-label" }, `${label} ${unit}`));
+    const latest = points.at(-1) ?? 0;
+    svg.append(svgNode("text", { x: x0 + tileWidth - 8, y: y0 + 17, class: "fc-tile-value", "text-anchor": "end" }, latest.toFixed(2)));
+    const centerX = x0 + tileWidth / 2, centerY = y0 + 48;
+    if (["roll", "pitch", "yaw", "compass"].includes(key)) {
+      svg.append(svgNode("circle", { cx: centerX, cy: centerY, r: 20, class: "fc-gauge-ring" }));
+      const angle = latest * Math.PI / 180 - Math.PI / 2;
+      svg.append(svgNode("line", { x1: centerX, y1: centerY, x2: centerX + Math.cos(angle) * 17, y2: centerY + Math.sin(angle) * 17, stroke: color, class: "fc-gauge-needle" }));
+    } else {
+      const span = Math.max(Math.abs(latest), points.length ? Math.max(...points.map((value) => Math.abs(value))) : 1, 0.001);
+      svg.append(svgNode("rect", { x: x0 + 10, y: centerY - 5, width: tileWidth - 20, height: 10, class: "fc-gauge-track" }));
+      svg.append(svgNode("rect", { x: x0 + 10, y: centerY - 5, width: (tileWidth - 20) * Math.min(1, Math.abs(latest) / span), height: 10, fill: color, class: "fc-gauge-bar" }));
+    }
+    const chartTop = y0 + 72, chartBottom = y0 + tileHeight - 9, chartLeft = x0 + 8, chartRight = x0 + tileWidth - 8;
+    if (points.length > 1) {
+      const min = Math.min(...points), max = Math.max(...points), range = max === min ? 1 : max - min;
+      const d = points.map((point, pointIndex) => `${pointIndex ? "L" : "M"}${chartLeft + pointIndex / (points.length - 1) * (chartRight - chartLeft)},${chartBottom - (point - min) / range * (chartBottom - chartTop)}`).join(" ");
+      svg.append(svgNode("path", { d, fill: "none", stroke: color, class: "fc-sparkline" }));
+    }
   });
-  for (let tick = 0; tick <= 5; tick += 1) {
-    const time = minTime + (maxTime - minTime) * tick / 5;
-    svg.append(svgNode("text", { x: x(time), y: height - 7, class: "axis-label", "text-anchor": "middle" }, `${(time - minTime).toFixed(2)}s`));
-  }
 }
 
 function drawPadRaw(svg, paddlers) {
@@ -918,6 +919,43 @@ function drawFcThrust(svg, totalElement) {
   svg.append(svgNode("path", { d: thrustPath, fill: "none", stroke: "#596b08", class: "fc-line" }));
   svg.append(svgNode("text", { x: margin.left, y: 12, class: "axis-label" }, "speed / wave / cumulative proxy"));
   svg.append(svgNode("text", { x: width - margin.right, y: height - 8, class: "axis-label", "text-anchor": "end" }, "time"));
+}
+
+function drawFcDrive(svg) {
+  svg.replaceChildren();
+  const points = state.fcDrive;
+  const width = svg.clientWidth || 900, height = 300;
+  const margin = { top: 24, right: 62, bottom: 34, left: 48 };
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  if (!points.length) {
+    svg.append(svgNode("text", { x: width / 2, y: height / 2, class: "empty", "text-anchor": "middle" }, "Waiting for FC data…"));
+    return;
+  }
+  let minTime = points[0].time, maxTime = points.at(-1).time;
+  if (minTime === maxTime) maxTime += 1;
+  const maxForce = Math.max(1, ...points.map((point) => point.force));
+  const maxSpeed = Math.max(0.1, ...points.map((point) => point.speed));
+  const x = (time) => margin.left + (time - minTime) / (maxTime - minTime) * (width - margin.left - margin.right);
+  const yForce = (value) => height - margin.bottom - value / maxForce * (height - margin.top - margin.bottom);
+  const ySpeed = (value) => height - margin.bottom - value / maxSpeed * (height - margin.top - margin.bottom);
+  for (let tick = 0; tick <= 4; tick += 1) {
+    const py = margin.top + tick * (height - margin.top - margin.bottom) / 4;
+    svg.append(svgNode("line", { x1: margin.left, y1: py, x2: width - margin.right, y2: py, class: "grid" }));
+    svg.append(svgNode("text", { x: margin.left - 8, y: py + 4, class: "axis-label", "text-anchor": "end" }, `${(maxForce * (4 - tick) / 4).toFixed(0)} N`));
+    svg.append(svgNode("text", { x: width - margin.right + 8, y: py + 4, class: "axis-label" }, `${(maxSpeed * (4 - tick) / 4).toFixed(1)} m/s`));
+  }
+  for (let tick = 0; tick <= 5; tick += 1) {
+    const time = minTime + (maxTime - minTime) * tick / 5;
+    svg.append(svgNode("text", { x: x(time), y: height - 10, class: "axis-label", "text-anchor": "middle" }, `${(time - minTime).toFixed(1)}s`));
+  }
+  const barWidth = Math.max(2, Math.min(14, (width - margin.left - margin.right) / Math.max(30, points.length) * 1.5));
+  points.forEach((point) => {
+    if (point.force <= 0) return;
+    svg.append(svgNode("rect", { x: x(point.time) - barWidth / 2, y: yForce(point.force), width: barWidth, height: yForce(0) - yForce(point.force), class: "force-bar" }));
+  });
+  const speedPath = points.map((point, index) => `${index ? "L" : "M"}${x(point.time).toFixed(1)},${ySpeed(point.speed).toFixed(1)}`).join(" ");
+  svg.append(svgNode("path", { d: speedPath, fill: "none", stroke: "#20b8b0", class: "fc-line" }));
+  svg.append(svgNode("text", { x: margin.left, y: 14, class: "axis-label" }, "bars: estimated drive force · line: boat speed"));
 }
 
 function graphConvergence(paddlers) {
@@ -985,16 +1023,9 @@ function render() {
     return;
   }
   if (isDebugView) {
+    drawFcDrive(elements.fcDriveChart);
     drawChart(elements.padChart, paddlers, { troughMarkers: true });
-    drawPadRaw(elements.padRawChart, paddlers);
-    drawTroughAlignment(elements.intervalChart, troughSeries, match.pairs);
-    drawChart(elements.fcChart, [{ points: state.fc, color: "#596b08" }]);
-    drawFcThrust(elements.fcThrustChart, elements.fcThrustTotal);
     drawFcAttributes(elements.fcAttributesChart);
-    elements.matchNote.textContent = match.pairs.length
-      ? `Timing ${match.score.toFixed(1)}% · Shape ${similarity.shape?.toFixed(1) ?? "—"}% · Intensity ${similarity.intensity?.toFixed(1) ?? "—"}% / `
-        + match.pairs.map((pair) => `${pair.names}: ${pair.matches.length}/${pair.expectedMatches} timed turning points`).join("  /  ")
-      : "Waiting for overlapping turning points from at least two paddles.";
     elements.legend.innerHTML = paddlers.map((p, i) => `<span><i style="--color:${colors[i % colors.length]}"></i>${p.name}</span>`).join("");
     elements.metrics.innerHTML = paddlers.map((p, i) => {
       const found = troughs(p.points);
@@ -1217,6 +1248,7 @@ async function poll() {
     }
     if (elements.dot) elements.dot.className = "online";
     if (elements.connection) elements.connection.textContent = config.mock ? "Mock data" : "Live";
+    if (elements.exportLogs && !config.mock) elements.exportLogs.hidden = false;
     if (config.mock) elements.error.textContent = "";
     render();
   } catch (error) {
@@ -1314,6 +1346,25 @@ elements.pause?.addEventListener("click", () => {
     state.running = true;
     elements.pause.textContent = "Pause stream";
     poll();
+  }
+});
+
+elements.exportLogs?.addEventListener("click", async () => {
+  elements.exportLogs.disabled = true;
+  try {
+    const response = await fetch("/api/logs/export", { cache: "no-store" });
+    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || "No telemetry logs available.");
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `telemetry-${new Date().toISOString().replace(/[:.]/g, "-")}.log`;
+    link.click();
+    URL.revokeObjectURL(url);
+    elements.exportLogs.hidden = true;
+  } catch (error) {
+    elements.exportLogs.disabled = false;
+    if (elements.error) elements.error.textContent = error.message;
   }
 });
 elements.reportButton?.addEventListener("click", () => {

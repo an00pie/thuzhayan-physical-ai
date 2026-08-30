@@ -2,6 +2,8 @@ import "dotenv/config";
 
 import express from "express";
 import PDFDocument from "pdfkit";
+import { appendFile, readFile, unlink } from "node:fs/promises";
+import path from "node:path";
 
 const app = express();
 const port = Number(process.env.PORT || 5173);
@@ -14,7 +16,27 @@ const ollamaModel = process.env.OLLAMA_MODEL || "gemma3-local:latest";
 const ollamaKeepAlive = process.env.OLLAMA_KEEP_ALIVE || "30m";
 const reportMaxTokens = Number(process.env.REPORT_MAX_TOKENS || 550);
 const chatMaxTokens = Number(process.env.CHAT_MAX_TOKENS || 400);
-const reportSystemPrompt = "Write a short, friendly coaching report for paddlers with no technical background. Use everyday language and briefly explain any unavoidable term. Focus on what happened, why it matters, and what the crew can do next. Include the estimated wave-adjusted thrust proxy when present, clearly explain that it is an estimate based on boat speed and gyro angle, not a direct force measurement. Refer to people only by their supplied ordinal labels, such as 1st Paddle, 2nd Paddle, or 4th Paddle. Never repeat device names, sensor IDs, codenames, IP addresses, or hardware labels. Write only the report body, at most 400 words. Do not write a title, header, footer, preamble, Markdown, bullets, tables, hashes, asterisks, or decorative separators. Use short plain-text section labels followed by compact paragraphs covering the overall run, timing, stroke consistency, thrust estimate, and data limitations. Finish with three simple lines labelled Action 1:, Action 2:, and Action 3:. Use supplied measurements when useful, clearly separate facts from educated guesses, and never invent data.";
+const reportSystemPrompt = "Write a very friendly, easy-to-read report for someone who has never worked with sensors or rowing data. Sound like a helpful coach talking to the crew. Use short sentences and ordinary words. Say what the boat and paddlers did, whether their strokes happened together, and what they can try next. Do not say telemetry, accelerometer, gyroscope, waveform, interpolation, correlation, Dynamic Time Warping, baseline, signal, vector, algorithm, or any other technical word unless you immediately explain it in plain English. Prefer phrases like ‘the boat was moving’, ‘the paddles moved together’, ‘one person was early’, and ‘the boat sped up’. If you mention a number, explain what it means in the same sentence. The force number is only a rough estimate made from how the boat moved; it is not a direct measurement of how hard someone pulled. Refer to people only by labels such as 1st Paddle, 2nd Paddle, or 4th Paddle. Never repeat device names, sensor IDs, codenames, IP addresses, or hardware labels. Write only the report body, at most 400 words. Do not write a title, header, footer, preamble, Markdown, bullets, tables, hashes, asterisks, or decorative separators. Use simple plain-text section labels followed by short paragraphs covering what happened, how well the crew moved together, boat movement, the rough push estimate, and limits of the information. Finish with exactly three simple lines labelled Action 1:, Action 2:, and Action 3:. Only use facts present in the supplied data; clearly say when something is an estimate or unknown.";
+const telemetryLogPath = path.resolve(process.env.TELEMETRY_LOG_PATH || "telemetry.log");
+
+async function appendTelemetryLog(source, payload) {
+  const formatValue = (value, indent = "") => {
+    if (value === null || value === undefined) return `${indent}${String(value)}`;
+    if (typeof value !== "object") return `${indent}${String(value)}`;
+    if (Array.isArray(value)) return value.length ? value.map((item, index) => `${indent}[${index}]\n${formatValue(item, `${indent}  `)}`).join("\n") : `${indent}(empty)`;
+    return Object.entries(value).map(([key, item]) => {
+      if (item && typeof item === "object") return `${indent}${key}:\n${formatValue(item, `${indent}  `)}`;
+      return `${indent}${key}: ${String(item)}`;
+    }).join("\n");
+  };
+  const block = `\n===== TELEMETRY RECORD =====\nreceived_at_ms: ${Date.now()}\nsource: ${source}\npayload:\n${formatValue(payload, "  ")}\n`;
+  try {
+    await appendFile(telemetryLogPath, block, "utf8");
+  } catch (error) {
+    // Logging must never take the telemetry proxy down.
+    console.warn(`Could not write telemetry log: ${error.message}`);
+  }
+}
 
 async function ollamaGenerate(prompt, system, maxTokens = 1400) {
   const ollamaResponse = await fetch(`${ollamaBaseUrl}/api/generate`, {
@@ -274,7 +296,9 @@ async function fetchConfiguredJson(variable) {
 
 async function proxyConfiguredJson(variable, response) {
   try {
-    response.json(await fetchConfiguredJson(variable));
+    const payload = await fetchConfiguredJson(variable);
+    await appendTelemetryLog(variable, payload);
+    response.json(payload);
   } catch (error) {
     response.status(502).json({
       error: error?.message || `${variable} could not be reached`,
@@ -287,6 +311,22 @@ async function proxyConfiguredJson(variable, response) {
 // current values from .env.
 app.get("/api/pad", (_request, response) => proxyConfiguredJson("ACCELEROMETER_ENDPOINT_URL", response));
 app.get("/api/fc", (_request, response) => proxyConfiguredJson("FC_ENDPOINT_URL", response));
+
+app.get("/api/logs/export", async (_request, response) => {
+  try {
+    const contents = await readFile(telemetryLogPath, "utf8");
+    if (!contents.trim()) { response.status(404).json({ error: "No telemetry logs available." }); return; }
+    await unlink(telemetryLogPath);
+    response.set({
+      "Content-Type": "text/plain; charset=utf-8",
+      "Content-Disposition": `attachment; filename="telemetry-${new Date().toISOString().replace(/[:.]/g, "-")}.log"`,
+    });
+    response.send(contents);
+  } catch (error) {
+    if (error?.code === "ENOENT") { response.status(404).json({ error: "No telemetry logs available." }); return; }
+    response.status(500).json({ error: error?.message || "Could not export telemetry logs." });
+  }
+});
 
 function wrapDegrees(value) {
   return ((value + 180) % 360 + 360) % 360 - 180;
@@ -440,10 +480,10 @@ function normalizePaddles(payload) {
   return result;
 }
 
-app.get(["/telemetry", "/telemetry/"], (_request, response) => {
+app.get(["/visualization", "/visualization/"], (_request, response) => {
   response.sendFile("thuzhayan.html", { root: process.cwd() });
 });
-app.get(["/physical-ai", "/physical-ai/", "/thuzhayan", "/thuzhayan/"], (_request, response) => response.redirect(308, "/telemetry"));
+app.get(["/physical-ai", "/physical-ai/", "/thuzhayan", "/thuzhayan/"], (_request, response) => response.redirect(308, "/visualization"));
 
 app.get("/api/telemetry/boat", async (_request, response) => {
   if (physicalAiMock) { response.json(mockPhysicalAiBoat()); return; }
