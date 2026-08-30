@@ -8,10 +8,13 @@ The root route (`/`) is the simplified mobile crew display. The complete graphin
 and diagnostics workspace is available at `/debug`. A touch-friendly live Three.js
 boat and crew view is available at `/visual`.
 
-The original THUZHAYAN Physical AI dashboard is reproduced unchanged at
-`/thuzhayan`. Its compatibility API is implemented by the Express server and
+The THUZHAYAN Physical AI dashboard is available at `/telemetry`. Its
+compatibility API is implemented by the Express server under
+`/api/telemetry/*` and
 reuses `ACCELEROMETER_ENDPOINT_URL`, `FC_ENDPOINT_URL`, `OLLAMA_BASE_URL`, and
 `OLLAMA_MODEL`; the existing Paddleline routes and frontend are independent.
+When `VITE_USE_MOCK_DATA=true`, this dashboard receives its own simulated boat
+and dual-paddler stream.
 
 Each paddler also receives a phase cue derived from the signed difference between
 their latest matched trough timestamp and the other paddlers: `SPEED UP`,

@@ -9,19 +9,27 @@ const config = {
   maxPoints: Number(import.meta.env.VITE_MAX_POINTS || 300),
   paddles: Number(import.meta.env.VITE_MOCK_PADDLE_COUNT || 3),
   minTroughDistance: Number(import.meta.env.VITE_TROUGH_MIN_DISTANCE_SECONDS || 0.6),
-  troughMatchTolerance: Number(import.meta.env.VITE_TROUGH_MATCH_TOLERANCE_SECONDS || 0.5),
+  // Allow normal timing variation between paddlers before considering strokes unmatched.
+  troughMatchTolerance: Number(import.meta.env.VITE_TROUGH_MATCH_TOLERANCE_SECONDS || 1.0),
   paceDeadbandMs: Number(import.meta.env.VITE_PACE_DEADBAND_MS || 40),
   paceGuidanceHoldMs: Number(import.meta.env.VITE_PACE_GUIDANCE_HOLD_MS || 2000),
   clockSyncUrls: String(import.meta.env.VITE_CLOCK_SYNC_ENDPOINT_URLS || "").split(",").map((url) => url.trim()).filter(Boolean),
   clockSyncMs: Number(import.meta.env.VITE_CLOCK_SYNC_INTERVAL_MS || 30000),
 };
 
-const colors = ["#1455ff", "#e54d2e", "#009b72", "#8e4ec6", "#d19d00", "#d2316f"];
+const colors = ["#e54616", "#596b08", "#20b8b0", "#d90000", "#f3a000", "#272b17"];
+const padPollTimestamps = new Map();
+let firstPadTimestampMs = null;
 const state = {
   paddlers: new Map(),
   fc: [],
+  fcTelemetry: [],
   totalDistance: 0,
   previousFcTime: null,
+  fcVelocity: 0,
+  fcAccelBaseline: null,
+  fcThrustTotal: 0,
+  fcThrust: [],
   timer: null,
   startedAt: performance.now(),
   startedWallClock: new Date().toISOString(),
@@ -52,6 +60,10 @@ const debugView = `
           <svg id="pad-chart" role="img" aria-label="Paddle acceleration chart"></svg>
           <div class="legend" id="legend"></div>
         </article>
+        <article class="panel raw-pad-panel" id="raw-pad-panel">
+          <div class="panel-heading"><div><p class="kicker">PADDLE TELEMETRY / RAW</p><h3>All paddle channels</h3></div><span>ACCEL + GYRO</span></div>
+          <svg id="pad-raw-chart" role="img" aria-label="Raw acceleration and gyroscope channels for every paddle"></svg>
+        </article>
         <article class="panel interval-panel" id="interval-panel">
           <div class="panel-heading">
             <div><p class="kicker">RHYTHM COMPARISON</p><h3>Trough timestamp alignment</h3></div>
@@ -61,8 +73,16 @@ const debugView = `
           <p class="chart-note" id="match-note">Waiting for troughs from at least two paddles.</p>
         </article>
         <article class="panel" id="fc-panel">
-          <div class="panel-heading"><div><p class="kicker">FLIGHT CONTROLLER</p><h3>Distance travelled</h3></div><span>METRES</span></div>
-          <svg id="fc-chart" role="img" aria-label="Flight controller distance chart"></svg>
+          <div class="panel-heading"><div><p class="kicker">FLIGHT CONTROLLER</p><h3>Estimated motion distance</h3></div><span>ACCELEROMETER / METRES</span></div>
+          <svg id="fc-chart" role="img" aria-label="Accelerometer-estimated distance chart"></svg>
+        </article>
+        <article class="panel" id="fc-thrust-panel">
+          <div class="panel-heading"><div><p class="kicker">FLIGHT CONTROLLER / WAVE MODEL</p><h3>Wave-adjusted thrust</h3></div><span id="fc-thrust-total">—</span></div>
+          <svg id="fc-thrust-chart" role="img" aria-label="Movement speed over gyro-derived wave angle with cumulative thrust proxy"></svg>
+        </article>
+        <article class="panel fc-attributes-panel" id="fc-attributes-panel">
+          <div class="panel-heading"><div><p class="kicker">FLIGHT CONTROLLER / RAW</p><h3>All FC attributes</h3></div><span>INDIVIDUAL SCALES</span></div>
+          <svg id="fc-attributes-chart" role="img" aria-label="Flight controller attributes chart"></svg>
         </article>
       </div>
       <p class="error" id="error"></p>
@@ -109,10 +129,10 @@ const reportView = `
     <header class="report-heading">
       <div><p class="section-number">04 / REPORT</p><h1>Run analysis</h1></div>
       <div class="report-heading-actions">
-        <span id="report-page-status">Generating analysis…</span>
+        <span id="report-page-status">Ready to generate</span>
         <div class="pdf-download-control">
-          <button id="download-report" disabled>Download PDF</button>
-          <div id="pdf-progress" class="generation-progress indeterminate" role="progressbar" aria-label="Report generation progress"><i></i></div>
+          <button id="download-report"><span id="pdf-spinner" class="loading-spinner" hidden></span><span id="pdf-button-label">Generate PDF</span></button>
+          <div id="pdf-progress" class="generation-progress indeterminate" role="progressbar" aria-label="Report generation progress" hidden><i></i></div>
         </div>
         <a href="/">Back to crew</a>
       </div>
@@ -144,6 +164,10 @@ document.querySelector("#app").innerHTML = isDebugView
 const elements = {
   padPanel: document.querySelector("#pad-panel"), fcPanel: document.querySelector("#fc-panel"),
   padChart: document.querySelector("#pad-chart"), fcChart: document.querySelector("#fc-chart"),
+  padRawChart: document.querySelector("#pad-raw-chart"),
+  fcThrustChart: document.querySelector("#fc-thrust-chart"), fcThrustTotal: document.querySelector("#fc-thrust-total"),
+  fcAttributesPanel: document.querySelector("#fc-attributes-panel"),
+  fcAttributesChart: document.querySelector("#fc-attributes-chart"),
   intervalChart: document.querySelector("#interval-chart"),
   metrics: document.querySelector("#metrics"), legend: document.querySelector("#legend"),
   error: document.querySelector("#error"), dot: document.querySelector("#connection-dot"),
@@ -154,6 +178,8 @@ const elements = {
   boatCanvas: document.querySelector("#boat-canvas"), visualStatus: document.querySelector("#visual-status"),
   reportPageStatus: document.querySelector("#report-page-status"),
   downloadReport: document.querySelector("#download-report"),
+  pdfSpinner: document.querySelector("#pdf-spinner"),
+  pdfButtonLabel: document.querySelector("#pdf-button-label"),
   pdfProgress: document.querySelector("#pdf-progress"),
   reportMessages: document.querySelector("#report-messages"),
   reportQuestionForm: document.querySelector("#report-question-form"),
@@ -162,9 +188,11 @@ const elements = {
 
 if (elements.padPanel) elements.padPanel.hidden = !config.mock && !config.padUrls.length;
 if (elements.fcPanel) elements.fcPanel.hidden = !config.mock && !config.fcUrl;
+if (elements.fcAttributesPanel) elements.fcAttributesPanel.hidden = !config.mock && !config.fcUrl;
 function paddlerId(event) {
-  if (event?.paddler_id === undefined || event?.paddler_id === null) throw new Error("Pad event is missing paddler_id");
-  return String(event.paddler_id);
+  const id = event?.paddler_id ?? event?.device_id;
+  if (id === undefined || id === null) throw new Error("Pad event is missing paddler_id or device_id");
+  return String(id);
 }
 
 function acceleration(event) {
@@ -206,7 +234,9 @@ function addPadEvents(events) {
     });
     const series = state.paddlers.get(id);
     series.name = event.device_name || series.name;
-    const sampleTime = Number(event.device_ms) / 1000;
+    const sampleTimeMs = Number(event.synchronized_timestamp_ms ?? event.device_ms ?? event.gateway_ms);
+    if (!Number.isFinite(sampleTimeMs)) throw new Error("Pad event is missing a usable timestamp");
+    const sampleTime = sampleTimeMs / 1000;
     const magnitude = acceleration(event);
     series.points.push({
       time: sampleTime,
@@ -225,25 +255,82 @@ function addPadEvents(events) {
 }
 
 function addFcMessages(messages) {
-  const positions = messages.filter((message) => message.mavpackettype === "GLOBAL_POSITION_INT");
-  if (!positions.length) return;
-  const item = positions.at(-1);
-  const time = Number(item.time_boot_ms) / 1000;
-  const speed = Math.hypot(Number(item.vx), Number(item.vy), Number(item.vz)) / 100;
-  if (state.previousFcTime !== null) {
-    const delta = time - state.previousFcTime;
-    if (delta > 0 && delta <= 10) state.totalDistance += speed * delta;
+  const records = messages.flatMap((message) => Array.isArray(message?.data) ? message.data : [message]);
+  for (const item of records) {
+    const time = Number(item?.timestamp_ms ?? item?.time_boot_ms) / 1000;
+    if (!Number.isFinite(time)) continue;
+    const imu = item.imu || {};
+    const values = {
+      roll: Number(imu.roll), pitch: Number(imu.pitch), yaw: Number(imu.yaw), compass: Number(item.compass_heading_deg),
+      accel_x: Number(imu.accel_x), accel_y: Number(imu.accel_y), accel_z: Number(imu.accel_z),
+      gyro_x: Number(imu.gyro_x), gyro_y: Number(imu.gyro_y), gyro_z: Number(imu.gyro_z),
+      gps_speed: Number(item.gps?.speed_m_s), gps_altitude: Number(item.gps?.alt_m),
+      latitude: Number(item.gps?.lat), longitude: Number(item.gps?.lon),
+      gps_satellites: Number(item.gps?.satellites), gps_fix: Number(item.gps?.fix_type),
+      battery_voltage: Number(item.battery?.voltage_v), battery_current: Number(item.battery?.current_a),
+      battery_percentage: Number(item.battery?.percentage), armed: item.armed ? 1 : 0,
+    };
+    values.accel_magnitude = Math.hypot(values.accel_x, values.accel_y, values.accel_z);
+    values.gyro_magnitude = Math.hypot(values.gyro_x, values.gyro_y, values.gyro_z);
+    state.fcTelemetry.push({ time, values });
   }
-  state.previousFcTime = time;
-  state.fc.push({ time, value: state.totalDistance, speed });
+  if (state.fcTelemetry.length > config.maxPoints) state.fcTelemetry.splice(0, state.fcTelemetry.length - config.maxPoints);
+  const motionRecords = records.filter((message) =>
+    message?.mavpackettype === "GLOBAL_POSITION_INT"
+    || [message?.imu?.accel_x, message?.imu?.accel_y, message?.imu?.accel_z].every((value) => Number.isFinite(Number(value)))
+  );
+  if (!motionRecords.length) return;
+  for (const item of motionRecords) {
+    const isQueuedRecord = Number.isFinite(Number(item.timestamp_ms));
+    const time = Number(isQueuedRecord ? item.timestamp_ms : item.time_boot_ms) / 1000;
+    if (!Number.isFinite(time) || time === state.previousFcTime) continue;
+    let speed, inertialSpeed = null;
+    if (isQueuedRecord) {
+      const acceleration = [Number(item.imu.accel_x), Number(item.imu.accel_y), Number(item.imu.accel_z)];
+      state.fcAccelBaseline ??= [...acceleration];
+      const deltaG = Math.hypot(...acceleration.map((value, index) => value - state.fcAccelBaseline[index]));
+      const gyroMagnitude = Math.hypot(Number(item.imu.gyro_x) || 0, Number(item.imu.gyro_y) || 0, Number(item.imu.gyro_z) || 0);
+      const gyroAngle = Math.hypot(Number(item.imu.roll) || 0, Number(item.imu.pitch) || 0);
+      if (state.previousFcTime !== null) {
+        const delta = time - state.previousFcTime;
+        if (delta > 0 && delta <= 2) {
+          const linearAcceleration = deltaG * 9.80665;
+          state.fcVelocity = (state.fcVelocity + linearAcceleration * delta) * Math.exp(-1.8 * delta);
+          if (deltaG < 0.035 && gyroMagnitude < 1.5) state.fcVelocity = 0;
+          state.totalDistance += state.fcVelocity * delta;
+        } else if (delta > 2) state.fcVelocity = 0;
+      }
+      const baselineAlpha = deltaG < 0.08 ? 0.025 : 0.003;
+      state.fcAccelBaseline = state.fcAccelBaseline.map(
+        (value, index) => value + (acceleration[index] - value) * baselineAlpha,
+      );
+      inertialSpeed = state.fcVelocity;
+      speed = inertialSpeed;
+      const wave = Math.sin(gyroAngle * Math.PI / 180);
+      if (state.previousFcTime !== null) {
+        const delta = time - state.previousFcTime;
+        if (delta > 0 && delta <= 2) state.fcThrustTotal += Math.abs(speed * wave) * delta;
+      }
+      state.fcThrust.push({ time, speed, wave, waveAngle: gyroAngle, thrust: state.fcThrustTotal });
+    } else {
+      speed = Math.hypot(Number(item.vx), Number(item.vy), Number(item.vz)) / 100;
+      if (state.previousFcTime !== null) {
+        const delta = time - state.previousFcTime;
+        if (delta > 0 && delta <= 10) state.totalDistance += speed * delta;
+      }
+    }
+    state.previousFcTime = time;
+    state.fc.push({ time, value: state.totalDistance, speed, inertialSpeed, thrust: state.fcThrustTotal, waveAngle: state.fcThrust.at(-1)?.waveAngle ?? null });
+  }
   if (state.fc.length > config.maxPoints) state.fc.splice(0, state.fc.length - config.maxPoints);
+  if (state.fcThrust.length > config.maxPoints) state.fcThrust.splice(0, state.fcThrust.length - config.maxPoints);
 }
 
 function troughs(points) {
   if (points.length < 7) return [];
   const values = points.map((point) => point.value);
   const range = Math.max(...values) - Math.min(...values);
-  const minimumProminence = Math.max(0.005, range * 0.06);
+  const minimumProminence = Math.max(0.005, range * 0.04);
   const candidates = [];
   const radius = 2;
   const prominenceRadius = Math.max(3, Math.min(15, Math.floor(points.length / 6)));
@@ -263,9 +350,32 @@ function troughs(points) {
   return result;
 }
 
+// Circular motion produces a repeating top and bottom. For synchronization,
+// compare both turning points in the orientation-independent magnitude signal.
+function circleExtrema(points) {
+  if (points.length < 7) return [];
+  const values = points.map((point) => point.value);
+  const range = Math.max(...values) - Math.min(...values);
+  const prominence = Math.max(0.003, range * 0.025);
+  const result = [];
+  for (let index = 2; index < values.length - 2; index += 1) {
+    const value = values[index];
+    const isBottom = value <= values[index - 1] && value <= values[index + 1]
+      && value <= values[index - 2] && value <= values[index + 2];
+    const isTop = value >= values[index - 1] && value >= values[index + 1]
+      && value >= values[index - 2] && value >= values[index + 2];
+    const local = values.slice(Math.max(0, index - 5), Math.min(values.length, index + 6));
+    const localRange = Math.max(...local) - Math.min(...local);
+    if ((isBottom || isTop) && localRange >= prominence) {
+      if (!result.length || points[index].time - points[result.at(-1)].time >= 0.18) result.push(index);
+    }
+  }
+  return result;
+}
+
 function troughTimestampSeries(paddlers) {
   return paddlers.map((paddler, index) => {
-    const found = troughs(paddler.points);
+    const found = circleExtrema(paddler.points);
     const points = found.map((troughIndex) => ({ time: paddler.points[troughIndex].time }));
     return {
       id: paddler.id,
@@ -716,6 +826,132 @@ function drawChart(svg, seriesList, { troughMarkers = false } = {}) {
   });
 }
 
+function drawFcAttributes(svg) {
+  svg.replaceChildren();
+  const rows = [
+    ["Roll", "roll", "°"], ["Pitch", "pitch", "°"], ["Yaw", "yaw", "°"], ["Compass", "compass", "°"],
+    ["Accel X", "accel_x", "g"], ["Accel Y", "accel_y", "g"], ["Accel Z", "accel_z", "g"], ["Accel |v|", "accel_magnitude", "g"],
+    ["Gyro X", "gyro_x", "°/s"], ["Gyro Y", "gyro_y", "°/s"], ["Gyro Z", "gyro_z", "°/s"], ["Gyro |v|", "gyro_magnitude", "°/s"],
+    ["GPS speed", "gps_speed", "m/s"], ["GPS altitude", "gps_altitude", "m"], ["Latitude", "latitude", "°"], ["Longitude", "longitude", "°"],
+    ["Satellites", "gps_satellites", ""], ["GPS fix", "gps_fix", ""],
+    ["Battery", "battery_voltage", "V"], ["Current", "battery_current", "A"], ["Battery %", "battery_percentage", "%"], ["Armed", "armed", "0/1"],
+  ];
+  const samples = state.fcTelemetry;
+  const width = svg.clientWidth || 1000;
+  const rowHeight = 34, top = 12, bottom = 28, left = 112, right = 82;
+  const height = top + rows.length * rowHeight + bottom;
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  if (!samples.length) {
+    svg.append(svgNode("text", { x: width / 2, y: height / 2, class: "empty", "text-anchor": "middle" }, "Waiting for FC data…"));
+    return;
+  }
+  let minTime = Math.min(...samples.map((sample) => sample.time));
+  let maxTime = Math.max(...samples.map((sample) => sample.time));
+  if (minTime === maxTime) maxTime += 1;
+  const x = (time) => left + (time - minTime) / (maxTime - minTime) * (width - left - right);
+  rows.forEach(([label, key, unit], rowIndex) => {
+    const points = samples.filter((sample) => Number.isFinite(sample.values[key]));
+    const yTop = top + rowIndex * rowHeight, yBottom = yTop + rowHeight - 6;
+    svg.append(svgNode("line", { x1: left, y1: yBottom, x2: width - right, y2: yBottom, class: "grid" }));
+    svg.append(svgNode("text", { x: left - 9, y: yTop + 17, class: "axis-label", "text-anchor": "end" }, label));
+    if (!points.length) return;
+    let min = Math.min(...points.map((point) => point.values[key]));
+    let max = Math.max(...points.map((point) => point.values[key]));
+    if (min === max) { const pad = Math.max(Math.abs(min) * .05, .05); min -= pad; max += pad; }
+    const y = (value) => yBottom - 3 - (value - min) / (max - min) * (rowHeight - 12);
+    const path = points.map((point, index) => `${index ? "L" : "M"}${x(point.time).toFixed(1)},${y(point.values[key]).toFixed(1)}`).join(" ");
+    svg.append(svgNode("path", { d: path, fill: "none", stroke: colors[rowIndex % colors.length], class: "fc-line" }));
+    svg.append(svgNode("text", { x: width - right + 7, y: yTop + 12, class: "fc-range" }, `${max.toFixed(2)} ${unit}`));
+    svg.append(svgNode("text", { x: width - right + 7, y: yBottom, class: "fc-range" }, `${min.toFixed(2)} ${unit}`));
+  });
+  for (let tick = 0; tick <= 5; tick += 1) {
+    const time = minTime + (maxTime - minTime) * tick / 5;
+    svg.append(svgNode("text", { x: x(time), y: height - 7, class: "axis-label", "text-anchor": "middle" }, `${(time - minTime).toFixed(2)}s`));
+  }
+}
+
+function drawPadRaw(svg, paddlers) {
+  svg.replaceChildren();
+  const labels = [["Accel X", "g"], ["Accel Y", "g"], ["Accel Z", "g"], ["Gyro X", "×100°/s"], ["Gyro Y", "×100°/s"], ["Gyro Z", "×100°/s"]];
+  const width = svg.clientWidth || 900, rowHeight = 42, top = 12, bottom = 24, left = 70, right = 12;
+  const height = top + labels.length * rowHeight + bottom;
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  const all = paddlers.flatMap((p) => p.points);
+  if (!all.length) { svg.append(svgNode("text", { x: width / 2, y: height / 2, class: "empty", "text-anchor": "middle" }, "Waiting for paddle data…")); return; }
+  let minTime = Math.min(...all.map((p) => p.time)), maxTime = Math.max(...all.map((p) => p.time)); if (minTime === maxTime) maxTime += 1;
+  const x = (time) => left + (time - minTime) / (maxTime - minTime) * (width - left - right);
+  labels.forEach(([label, unit], channel) => {
+    const values = paddlers.flatMap((p) => p.points.map((point) => point.channels[channel]));
+    const min = Math.min(...values), max = Math.max(...values); const span = max === min ? 0.1 : max - min;
+    const yTop = top + channel * rowHeight, yBottom = yTop + rowHeight - 7;
+    svg.append(svgNode("line", { x1: left, y1: yBottom, x2: width - right, y2: yBottom, class: "grid" }));
+    svg.append(svgNode("text", { x: left - 8, y: yTop + 16, class: "axis-label", "text-anchor": "end" }, label));
+    paddlers.forEach((paddler, index) => {
+      const path = paddler.points.map((point, i) => `${i ? "L" : "M"}${x(point.time).toFixed(1)},${(yBottom - 3 - (point.channels[channel] - min) / span * (rowHeight - 13)).toFixed(1)}`).join(" ");
+      if (path) svg.append(svgNode("path", { d: path, fill: "none", stroke: colors[index % colors.length], class: "pad-line" }));
+    });
+    svg.append(svgNode("text", { x: width - right, y: yTop + 12, class: "fc-range", "text-anchor": "end" }, `${max.toFixed(2)} ${unit}`));
+  });
+}
+
+function drawFcThrust(svg, totalElement) {
+  svg.replaceChildren();
+  const points = state.fcThrust;
+  const width = svg.clientWidth || 800, height = 270;
+  const margin = { top: 18, right: 58, bottom: 30, left: 46 };
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  if (totalElement) totalElement.textContent = points.length ? `${state.fcThrustTotal.toFixed(2)} m·s⁻¹` : "—";
+  if (!points.length) { svg.append(svgNode("text", { x: width / 2, y: height / 2, class: "empty", "text-anchor": "middle" }, "Waiting for FC data…")); return; }
+  let min = points[0].time, max = points.at(-1).time; if (min === max) max += 1;
+  const x = (t) => margin.left + (t - min) / (max - min) * (width - margin.left - margin.right);
+  const line = (key, color, scaleMin, scaleMax) => {
+    const y = (v) => height - margin.bottom - (v - scaleMin) / (scaleMax - scaleMin) * (height - margin.top - margin.bottom);
+    const d = points.map((p, i) => `${i ? "L" : "M"}${x(p.time).toFixed(1)},${y(p[key]).toFixed(1)}`).join(" ");
+    svg.append(svgNode("path", { d, fill: "none", stroke: color, class: "fc-line" }));
+  };
+  const maxSpeed = Math.max(.1, ...points.map((p) => p.speed));
+  line("speed", "#20b8b0", 0, maxSpeed);
+  line("wave", "#e54616", -1, 1);
+  const maxThrust = Math.max(.1, ...points.map((p) => p.thrust));
+  const yThrust = (v) => height - margin.bottom - v / maxThrust * (height - margin.top - margin.bottom);
+  const thrustPath = points.map((p, i) => `${i ? "L" : "M"}${x(p.time).toFixed(1)},${yThrust(p.thrust).toFixed(1)}`).join(" ");
+  svg.append(svgNode("path", { d: thrustPath, fill: "none", stroke: "#596b08", class: "fc-line" }));
+  svg.append(svgNode("text", { x: margin.left, y: 12, class: "axis-label" }, "speed / wave / cumulative proxy"));
+  svg.append(svgNode("text", { x: width - margin.right, y: height - 8, class: "axis-label", "text-anchor": "end" }, "time"));
+}
+
+function graphConvergence(paddlers) {
+  const pairs = [];
+  const sampleAt = (points, time) => {
+    let index = 1;
+    while (index < points.length && points[index].time < time) index += 1;
+    const left = points[Math.max(0, index - 1)], right = points[Math.min(points.length - 1, index)];
+    if (!left || !right) return null;
+    const ratio = right.time === left.time ? 0 : (time - left.time) / (right.time - left.time);
+    return left.value + (right.value - left.value) * ratio;
+  };
+  for (let i = 0; i < paddlers.length; i += 1) for (let j = i + 1; j < paddlers.length; j += 1) {
+    const a = paddlers[i].points, b = paddlers[j].points;
+    const start = Math.max(a[0]?.time ?? Infinity, b[0]?.time ?? Infinity), end = Math.min(a.at(-1)?.time ?? -Infinity, b.at(-1)?.time ?? -Infinity);
+    if (!(end > start)) continue;
+    const av = [], bv = [];
+    for (let k = 0; k < 64; k += 1) { const t = start + (end - start) * k / 63; av.push(sampleAt(a, t)); bv.push(sampleAt(b, t)); }
+    const am = av.reduce((s, v) => s + v, 0) / av.length, bm = bv.reduce((s, v) => s + v, 0) / bv.length;
+    const rangeA = Math.max(...av) - Math.min(...av), rangeB = Math.max(...bv) - Math.min(...bv);
+    const duration = end - start;
+    const numerator = av.reduce((s, v, k) => s + (v - am) * (bv[k] - bm), 0);
+    const denominator = Math.sqrt(av.reduce((s, v) => s + (v - am) ** 2, 0) * bv.reduce((s, v) => s + (v - bm) ** 2, 0));
+    if (denominator) {
+      const correlationScore = Math.max(0, (numerator / denominator + 1) / 2) * 100;
+      // A long, nearly flat signal is not evidence of synchronized strokes.
+      // Apply a simple threshold: below it, reject the comparison entirely.
+      const sharedRange = Math.min(rangeA, rangeB);
+      pairs.push(duration > 2 && sharedRange < 0.08 ? 0 : correlationScore);
+    } else if (duration > 2 && Math.min(rangeA, rangeB) < 0.08) pairs.push(0);
+  }
+  return pairs.length ? pairs.reduce((a, b) => a + b, 0) / pairs.length : null;
+}
+
 function render() {
   const paddlers = [...state.paddlers.values()];
   const troughSeries = troughTimestampSeries(paddlers);
@@ -727,9 +963,13 @@ function render() {
     { value: similarity.intensity, weight: 0.2 },
   ].filter((component) => component.value !== null);
   const componentWeight = components.reduce((sum, component) => sum + component.weight, 0);
-  const overallScore = componentWeight
+  const rawOverallScore = componentWeight
     ? components.reduce((sum, component) => sum + component.value * component.weight, 0) / componentWeight
     : null;
+  const convergence = graphConvergence(paddlers);
+  const blendedScore = rawOverallScore === null ? convergence : convergence === null
+    ? rawOverallScore : rawOverallScore * 0.25 + convergence * 0.75;
+  const overallScore = blendedScore;
   state.latestAnalysis = { overall: overallScore, timing: match.score, shape: similarity.shape, intensity: similarity.intensity, match };
   const latestAnalysisTime = Math.max(...paddlers.map((paddler) => paddler.points.at(-1)?.time ?? -Infinity));
   if (Number.isFinite(latestAnalysisTime) && latestAnalysisTime !== state.lastAnalysisTime) {
@@ -746,12 +986,15 @@ function render() {
   }
   if (isDebugView) {
     drawChart(elements.padChart, paddlers, { troughMarkers: true });
+    drawPadRaw(elements.padRawChart, paddlers);
     drawTroughAlignment(elements.intervalChart, troughSeries, match.pairs);
-    drawChart(elements.fcChart, [{ points: state.fc, color: "#8e4ec6" }]);
+    drawChart(elements.fcChart, [{ points: state.fc, color: "#596b08" }]);
+    drawFcThrust(elements.fcThrustChart, elements.fcThrustTotal);
+    drawFcAttributes(elements.fcAttributesChart);
     elements.matchNote.textContent = match.pairs.length
       ? `Timing ${match.score.toFixed(1)}% · Shape ${similarity.shape?.toFixed(1) ?? "—"}% · Intensity ${similarity.intensity?.toFixed(1) ?? "—"}% / `
-        + match.pairs.map((pair) => `${pair.names}: ${pair.matches.length}/${pair.expectedMatches} timed strokes`).join("  /  ")
-      : "Waiting for overlapping trough timestamps from at least two paddles.";
+        + match.pairs.map((pair) => `${pair.names}: ${pair.matches.length}/${pair.expectedMatches} timed turning points`).join("  /  ")
+      : "Waiting for overlapping turning points from at least two paddles.";
     elements.legend.innerHTML = paddlers.map((p, i) => `<span><i style="--color:${colors[i % colors.length]}"></i>${p.name}</span>`).join("");
     elements.metrics.innerHTML = paddlers.map((p, i) => {
       const found = troughs(p.points);
@@ -769,6 +1012,7 @@ function render() {
     elements.fcSummary.innerHTML = `
       <div><span>SPEED</span><strong>${latestFc.speed.toFixed(2)}<small> m/s</small></strong></div>
       <div><span>DISTANCE</span><strong>${latestFc.value.toFixed(1)}<small> m</small></strong></div>
+      <div><span>THRUST PROXY</span><strong>${state.fcThrustTotal.toFixed(1)}<small> m·s⁻¹</small></strong></div>
     `;
   } else {
     elements.fcSummary.hidden = true;
@@ -791,7 +1035,11 @@ function mockData(elapsed) {
       accel_g: { x: scale * .3 * Math.sin(elapsed * 2.1 + phase) + noise(), y: scale * .2 * Math.sin(elapsed * 1.4 + .8 + phase) + noise(), z: 1 + scale * .12 * Math.sin(elapsed * 2.8 + 1.5 + phase) + noise() },
       gyro_dps: { x: 55 * Math.sin(elapsed * 2.1 + phase), y: 24 * Math.sin(elapsed * 2.1 + phase + .7), z: 18 * Math.sin(elapsed * 2.1 + phase + 1.2) } };
   });
-  const fc = [{ mavpackettype: "GLOBAL_POSITION_INT", time_boot_ms: elapsed * 1000, vx: 170 + 45 * Math.sin(elapsed * .8), vy: 35 * Math.sin(elapsed * .55 + .6), vz: 12 * Math.sin(elapsed * .4) }];
+  const fc = [{ timestamp_ms: elapsed * 1000, imu: {
+    roll: 8 * Math.sin(elapsed * .55), pitch: 5 * Math.sin(elapsed * .8 + .4), yaw: elapsed * 4,
+    accel_x: .08 * Math.sin(elapsed * 2.1), accel_y: .06 * Math.sin(elapsed * 1.7), accel_z: 1 + .12 * Math.sin(elapsed * 2.4),
+    gyro_x: 4.4 * Math.cos(elapsed * .55), gyro_y: 4 * Math.cos(elapsed * .8 + .4), gyro_z: 2,
+  }, gps: { speed_m_s: 2.4 + .4 * Math.sin(elapsed * .8) } }];
   return { pads, fc };
 }
 
@@ -799,6 +1047,15 @@ function averageAnalysis(key) {
   return state.analysisCounts[key]
     ? state.analysisTotals[key] / state.analysisCounts[key]
     : null;
+}
+
+function ordinalPaddle(index) {
+  const number = index + 1;
+  const remainder100 = number % 100;
+  const suffix = remainder100 >= 11 && remainder100 <= 13
+    ? "th"
+    : ({ 1: "st", 2: "nd", 3: "rd" }[number % 10] || "th");
+  return `${number}${suffix} Paddle`;
 }
 
 function buildReportSummary() {
@@ -814,7 +1071,7 @@ function buildReportSummary() {
     run_duration_seconds: (performance.now() - state.startedAt) / 1000,
     scoring_method: {
       overall_weights: { timing: 0.4, waveform_shape_dtw: 0.4, intensity: 0.2 },
-      trough_match_tolerance_seconds: config.troughMatchTolerance,
+      extrema_match_tolerance_seconds: config.troughMatchTolerance,
       pace_deadband_ms: config.paceDeadbandMs,
       missing_strokes_score_zero: true,
     },
@@ -831,19 +1088,22 @@ function buildReportSummary() {
       intensity: state.latestAnalysis.intensity,
     } : null,
     timing_pair_coverage: timestampMatch.pairs.map((pair) => ({
-      paddlers: pair.names,
+      paddlers: [
+        ordinalPaddle(paddlers.findIndex((paddler) => paddler.id === pair.leftId)),
+        ordinalPaddle(paddlers.findIndex((paddler) => paddler.id === pair.rightId)),
+      ].join(" and "),
       score_percent: pair.score,
       matched_strokes: pair.matches.length,
       expected_strokes: pair.expectedMatches,
     })),
-    paddlers: paddlers.map((paddler) => {
+    paddlers: paddlers.map((paddler, index) => {
       const found = troughs(paddler.points);
       const periods = found.slice(1).map((right, index) =>
         paddler.points[right].time - paddler.points[found[index]].time
       );
       return {
         id: paddler.id,
-        name: paddler.name,
+        name: ordinalPaddle(index),
         total_samples_received: paddler.totalSamples,
         observed_duration_seconds: paddler.firstTime === null ? 0 : paddler.lastTime - paddler.firstTime,
         acceleration_magnitude_g: {
@@ -862,6 +1122,8 @@ function buildReportSummary() {
     flight_controller: latestFc ? {
       latest_speed_mps: latestFc.speed,
       cumulative_distance_m: latestFc.value,
+      estimated_thrust_proxy_m_s: state.fcThrustTotal,
+      latest_wave_angle_deg: latestFc.waveAngle,
     } : null,
   };
 }
@@ -877,13 +1139,33 @@ async function getPadQueue(url) {
   const response = await fetch(url, { headers: { Accept: "application/json" }, cache: "no-store" });
   if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
   const payload = await response.json();
+  if (payload && !Array.isArray(payload) && Array.isArray(payload.data)) {
+    const currentTimestamp = Number(payload.timestamp_ms);
+    const previousTimestamp = padPollTimestamps.get(url);
+    if (Number.isFinite(currentTimestamp)) {
+      firstPadTimestampMs ??= currentTimestamp;
+      padPollTimestamps.set(url, currentTimestamp);
+    }
+    if (!payload.data.length || !Number.isFinite(currentTimestamp)) return payload.data;
+
+    const windowStart = Number.isFinite(previousTimestamp) ? previousTimestamp : currentTimestamp;
+    const windowDuration = Math.max(0, currentTimestamp - windowStart);
+    return payload.data.map((event, index) => ({
+      ...event,
+      // Place queued samples in arrival order across the interval between polls.
+      // The final event lands exactly on the current gateway timestamp.
+      synchronized_timestamp_ms: windowStart
+        + windowDuration * ((index + 1) / payload.data.length)
+        - firstPadTimestampMs,
+    }));
+  }
   if (payload && !Array.isArray(payload) && Array.isArray(payload.events)) {
     return payload.events;
   }
   // Retain compatibility with the earlier bare event/list response.
   if (Array.isArray(payload)) return payload;
-  if (payload && typeof payload === "object" && payload.paddler_id != null) return [payload];
-  throw new Error("Pad endpoint must return { count, events } with an events array");
+  if (payload && typeof payload === "object" && (payload.paddler_id != null || payload.device_id != null)) return [payload];
+  throw new Error("Pad endpoint must return { count, data } or { count, events } with an array");
 }
 
 async function getPadEvents() {
@@ -923,12 +1205,15 @@ async function poll() {
     if (config.mock) {
       const data = mockData((performance.now() - state.startedAt) / 1000); addPadEvents(data.pads); addFcMessages(data.fc);
     } else {
-      const [padResult, fc] = await Promise.all([
+      const [padResult, fcResult] = await Promise.all([
         config.padUrls.length ? getPadEvents() : { events: [], errors: [] },
-        config.fcUrl ? getJson(config.fcUrl) : [],
+        config.fcUrl
+          ? getJson(config.fcUrl).then((messages) => ({ messages, error: "" }))
+            .catch((error) => ({ messages: [], error: `FC: ${error.message}` }))
+          : { messages: [], error: "" },
       ]);
-      addPadEvents(padResult.events); addFcMessages(fc);
-      elements.error.textContent = padResult.errors.join(" · ");
+      addPadEvents(padResult.events); addFcMessages(fcResult.messages);
+      elements.error.textContent = [...padResult.errors, fcResult.error].filter(Boolean).join(" · ");
     }
     if (elements.dot) elements.dot.className = "online";
     if (elements.connection) elements.connection.textContent = config.mock ? "Mock data" : "Live";
@@ -952,6 +1237,8 @@ async function poll() {
 
 let reportPageSummary = null;
 let reportPageAnalysis = "";
+let reportPdfUrl = "";
+const reportAnalysisCacheKey = "paddleline-report-analysis-v2";
 const reportConversation = [];
 let reportChatBusy = false;
 
@@ -1002,21 +1289,12 @@ async function initializeReportPage() {
     const stored = sessionStorage.getItem("paddleline-report-summary");
     if (!stored) throw new Error("No run summary found. Return to the crew page and generate a report first.");
     reportPageSummary = JSON.parse(stored);
-    reportPageAnalysis = sessionStorage.getItem("paddleline-report-analysis") || "";
-    if (!reportPageAnalysis) {
-      const result = await responseJson(await fetch("/api/report/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ summary: reportPageSummary }),
-      }));
-      reportPageAnalysis = result.analysis;
-      sessionStorage.setItem("paddleline-report-analysis", reportPageAnalysis);
-    }
-    elements.reportPageStatus.textContent = "Analysis complete";
-    elements.downloadReport.disabled = false;
-    elements.reportQuestionForm.querySelector("button").disabled = false;
-    elements.reportMessages.innerHTML = "<p>Ask a question about this run.</p>";
-    elements.downloadReport.click();
+    reportPageAnalysis = sessionStorage.getItem(reportAnalysisCacheKey) || "";
+    elements.reportPageStatus.textContent = reportPageAnalysis ? "Analysis cached · PDF not generated" : "Ready to generate";
+    elements.reportMessages.innerHTML = reportPageAnalysis
+      ? "<p>Ask a question about this run, or generate its PDF.</p>"
+      : "<p>Generate the PDF to enable questions about this run.</p>";
+    elements.reportQuestionForm.querySelector("button").disabled = !reportPageAnalysis;
   } catch (error) {
     elements.reportPageStatus.textContent = "Unable to generate report";
     elements.reportMessages.textContent = error.message;
@@ -1044,17 +1322,41 @@ elements.reportButton?.addEventListener("click", () => {
     return;
   }
   sessionStorage.removeItem("paddleline-report-analysis");
+  sessionStorage.removeItem(reportAnalysisCacheKey);
   sessionStorage.setItem("paddleline-report-summary", JSON.stringify(buildReportSummary()));
   window.location.assign("/report");
 });
 elements.downloadReport?.addEventListener("click", async () => {
+  if (reportPdfUrl) {
+    const link = document.createElement("a");
+    link.href = reportPdfUrl;
+    link.download = `paddle-report-${new Date().toISOString().replaceAll(":", "-")}.pdf`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    elements.reportPageStatus.textContent = "PDF downloaded";
+    return;
+  }
   elements.downloadReport.disabled = true;
-  elements.downloadReport.textContent = "Preparing PDF…";
-  elements.reportPageStatus.textContent = "Preparing PDF…";
+  elements.pdfSpinner.hidden = false;
+  elements.pdfButtonLabel.textContent = "Generating…";
+  elements.reportPageStatus.textContent = reportPageAnalysis ? "Preparing PDF…" : "Generating analysis…";
   elements.pdfProgress.hidden = false;
   elements.pdfProgress.classList.add("indeterminate");
   elements.pdfProgress.style.removeProperty("--progress");
   try {
+    if (!reportPageAnalysis) {
+      const result = await responseJson(await fetch("/api/report/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ summary: reportPageSummary }),
+      }));
+      reportPageAnalysis = result.analysis;
+      sessionStorage.setItem(reportAnalysisCacheKey, reportPageAnalysis);
+      elements.reportQuestionForm.querySelector("button").disabled = false;
+      elements.reportMessages.innerHTML = "<p>Ask a question about this run.</p>";
+      elements.reportPageStatus.textContent = "Preparing PDF…";
+    }
     const response = await fetch("/api/report/pdf", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1080,7 +1382,7 @@ elements.downloadReport?.addEventListener("click", async () => {
         if (totalBytes > 0) {
           const percent = Math.min(100, receivedBytes / totalBytes * 100);
           elements.pdfProgress.style.setProperty("--progress", `${percent}%`);
-          elements.downloadReport.textContent = `Downloading ${Math.round(percent)}%`;
+          elements.pdfButtonLabel.textContent = `Downloading ${Math.round(percent)}%`;
         }
       }
       blob = new Blob(chunks, { type: response.headers.get("Content-Type") || "application/pdf" });
@@ -1089,26 +1391,23 @@ elements.downloadReport?.addEventListener("click", async () => {
     }
     elements.pdfProgress.classList.remove("indeterminate");
     elements.pdfProgress.style.setProperty("--progress", "100%");
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `paddle-report-${new Date().toISOString().replaceAll(":", "-")}.pdf`;
-    document.body.append(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-    elements.reportPageStatus.textContent = "PDF downloaded";
+    reportPdfUrl = URL.createObjectURL(blob);
+    elements.reportPageStatus.textContent = "PDF ready to download";
   } catch (error) {
     elements.reportPageStatus.textContent = error.message;
   } finally {
     elements.downloadReport.disabled = false;
-    elements.downloadReport.textContent = "Download PDF";
+    elements.pdfSpinner.hidden = true;
+    elements.pdfButtonLabel.textContent = reportPdfUrl ? "Download PDF" : "Generate PDF";
     window.setTimeout(() => {
       elements.pdfProgress.hidden = true;
       elements.pdfProgress.classList.add("indeterminate");
       elements.pdfProgress.style.removeProperty("--progress");
     }, 600);
   }
+});
+window.addEventListener("beforeunload", () => {
+  if (reportPdfUrl) URL.revokeObjectURL(reportPdfUrl);
 });
 elements.reportQuestionForm?.addEventListener("submit", async (event) => {
   event.preventDefault();

@@ -5,52 +5,58 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Thuzhayan · RPi 5 Physical AI Boat & Paddle Telemetry</title>
 </head>
-<body style="margin: 0; background: #030d17; color: #e8f5fb; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+<body>
 <main id="thuzhayan-live-dashboard">
   <style>
-    #thuzhayan-live-dashboard { max-width: 1060px; margin: 24px auto; padding: 0 20px 40px; box-sizing: border-box; }
+    :root { --blue: #e54616; --paper: #f7efd9; --ink: #15180d; --muted: #4a4e22; --shadow: #aab56b; --yellow: #f3a000; --water: #20b8b0; }
+    body { margin: 0; min-width: 320px; min-height: 100vh; color: var(--ink); background: linear-gradient(#b8c27d 1px, transparent 1px), linear-gradient(90deg, #b8c27d 1px, transparent 1px), #d4d7a4; background-size: 24px 24px; font-family: "IBM Plex Mono", "Courier New", ui-monospace, monospace; }
+    #thuzhayan-live-dashboard { width: calc(100vw - 46px); max-width: 1240px; min-height: calc(100vh - 46px); margin: 21px auto 25px; padding: 20px; box-sizing: border-box; border: 2px solid var(--blue); background: var(--paper); box-shadow: 14px 14px 0 var(--shadow); }
     #thuzhayan-live-dashboard * { box-sizing: border-box; }
-    
+
     .badge-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
-    .badge { padding: 5px 12px; border-radius: 20px; font-size: 0.76rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #9cc0d2; }
-    .badge.active { background: rgba(67, 197, 219, 0.15); border-color: #43c5db; color: #43c5db; }
-    .badge.alert { background: rgba(255, 77, 77, 0.2); border-color: #ff4d4d; color: #ff6b6b; }
-    
-    .topline { display: flex; justify-content: space-between; gap: 14px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
-    h1 { margin: 0; font-size: clamp(1.6rem, 4vw, 2.4rem); letter-spacing: .02em; background: linear-gradient(135deg, #ffffff 0%, #83e8ff 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-    .tag { color: #83e8ff; font-size: .85rem; text-transform: uppercase; letter-spacing: .14em; font-weight: 700; }
-    .state { padding: 6px 16px; background: rgba(155, 238, 195, 0.12); border: 1px solid #9beec3; color: #9beec3; border-radius: 8px; font-weight: 700; font-size: 0.9rem; }
-    
-    /* SECTION CONTAINERS */
-    .telemetry-section { background: rgba(8, 30, 48, 0.65); border: 1px solid #1a3c54; border-radius: 16px; padding: 20px; margin-bottom: 28px; backdrop-filter: blur(10px); box-shadow: 0 10px 24px rgba(0,0,0,0.3); }
-    .section-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(26, 60, 84, 0.8); padding-bottom: 12px; margin-bottom: 16px; }
-    .section-title { font-size: 1.15rem; font-weight: 800; color: #83e8ff; letter-spacing: 0.04em; display: flex; align-items: center; gap: 8px; }
-    .section-subtitle { font-size: 0.78rem; color: #82a8bc; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
-    
-    /* ANIMATIONS & VISUALIZERS */
-    .water-box { position: relative; height: 190px; overflow: hidden; border: 1px solid #23516d; border-radius: 12px; background: linear-gradient(#092b45 0%, #073a59 72%, #046b8c 100%); margin-bottom: 16px; }
+    .badge { padding: 6px 10px; border: 1px solid var(--blue); border-radius: 0; color: var(--muted); background: white; font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+    .badge.active { color: var(--blue); background: var(--yellow); border-color: var(--blue); }
+    .badge.alert { color: #c32626; background: #fff3f3; border-color: #c32626; }
+
+    .topline { display: flex; justify-content: space-between; gap: 14px; align-items: center; margin-bottom: 14px; padding: 14px 0; border-top: 2px solid var(--blue); border-bottom: 2px solid var(--blue); flex-wrap: wrap; }
+    h1 { margin: 0; color: var(--ink); font-family: Arial, Helvetica, sans-serif; font-size: clamp(1.6rem, 4vw, 2.4rem); letter-spacing: -.04em; }
+    .tag { margin-bottom: 6px; color: var(--blue); font-size: .75rem; text-transform: uppercase; letter-spacing: .14em; font-weight: 700; }
+    .state { padding: 8px 12px; border: 1px solid var(--blue); border-radius: 0; color: var(--blue); background: white; font-weight: 700; font-size: .75rem; text-transform: uppercase; }
+
+    .telemetry-section { padding: 18px; margin-bottom: 14px; border: 2px solid var(--blue); border-radius: 0; background: white; }
+    .section-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--blue); padding-bottom: 12px; margin-bottom: 14px; }
+    .section-title { display: flex; align-items: center; gap: 8px; color: var(--ink); font-size: 1rem; font-weight: 800; letter-spacing: .02em; }
+    .section-subtitle { color: var(--blue); font-size: .66rem; text-transform: uppercase; letter-spacing: .1em; font-weight: 600; text-align: right; }
+
+    .water-box { position: relative; height: 190px; overflow: hidden; border: 1px solid var(--blue); border-radius: 0; background: linear-gradient(180deg, #f7dfb8 0%, #f3a000 42%, #20b8b0 43%, #087f9c 100%); margin-bottom: 14px; }
     .water-box svg.waves { position: absolute; inset: 0; width: 100%; height: 100%; }
-    .live-tag { position: absolute; z-index: 3; left: 16px; top: 12px; padding: 4px 10px; color: #061827; background: #9beec3; border-radius: 6px; font-size: 0.72rem; font-weight: 800; letter-spacing: .08em; }
-    
-    .boat-graphic { position: absolute; z-index: 2; left: 50%; top: 48%; transform: translate(-50%, -50%); filter: drop-shadow(0 10px 14px #01101a); transition: transform 0.3s ease; }
-    
-    /* METRICS GRIDS */
-    .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
-    .metric-card { padding: 14px 16px; border: 1px solid #1a3c54; border-radius: 12px; background: #081e30; transition: transform 0.2s, border-color 0.2s; }
-    .metric-card:hover { border-color: #43c5db; transform: translateY(-2px); }
-    .metric-card small { display: block; color: #82a8bc; text-transform: uppercase; letter-spacing: .08em; font-size: 0.7rem; font-weight: 700; margin-bottom: 6px; }
-    .metric-card strong { font-size: 1.25rem; color: #ffffff; font-weight: 800; }
-    .metric-card .sub-value { font-size: 0.78rem; color: #9cc0d2; margin-top: 4px; font-weight: 600; }
-    
-    /* TABS */
-    .tabs { display: flex; gap: 8px; border-bottom: 1px solid #1a3c54; margin-bottom: 16px; }
-    .tab-btn { padding: 12px 20px; background: transparent; border: none; border-bottom: 2px solid transparent; color: #82a8bc; font-size: 0.95rem; font-weight: 700; cursor: pointer; transition: all 0.2s; }
-    .tab-btn.active { color: #83e8ff; border-bottom-color: #83e8ff; }
-    .tab-content { display: none; padding: 20px; border: 1px solid #1a3c54; border-radius: 12px; background: #081e30; color: #d6eaf4; line-height: 1.6; }
+    .live-tag { position: absolute; z-index: 3; left: 12px; top: 10px; padding: 5px 8px; color: white; background: var(--blue); border-radius: 0; font-size: .62rem; font-weight: 800; letter-spacing: .08em; }
+    .boat-graphic { position: absolute; z-index: 2; left: 50%; top: 48%; transform: translate(-50%, -50%); filter: drop-shadow(0 8px 10px #59620d); transition: transform .3s ease; }
+
+    .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 9px; }
+    .metric-card { min-width: 0; padding: 12px; border: 1px solid var(--blue); border-radius: 0; background: white; transition: background .15s; }
+    .metric-card:hover { background: #f3a000; }
+    .metric-card small { display: block; color: var(--blue); text-transform: uppercase; letter-spacing: .09em; font-size: .62rem; font-weight: 700; margin-bottom: 7px; }
+    .metric-card strong, .metric-card strong[style] { color: var(--ink) !important; font-family: Arial, Helvetica, sans-serif; font-size: 1.28rem; font-weight: 700; }
+    .metric-card .sub-value { color: var(--muted); margin-top: 4px; font-size: .68rem; font-weight: 500; }
+
+    .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--blue); margin-bottom: 14px; overflow-x: auto; }
+    .tab-btn { flex: 1; min-width: max-content; padding: 11px 14px; border: 0; border-right: 1px solid var(--blue); border-bottom: 3px solid transparent; color: var(--muted); background: white; font: inherit; font-size: .72rem; font-weight: 700; cursor: pointer; }
+    .tab-btn.active { color: var(--blue); border-bottom-color: var(--blue); background: #f3a000; }
+    .tab-content { display: none; padding: 16px; border: 1px solid var(--blue); border-radius: 0; background: white; color: var(--ink); line-height: 1.6; }
     .tab-content.active { display: block; }
-    
-    .btn-action { padding: 10px 20px; background: linear-gradient(135deg, #0d8bb0, #046b8c); border: none; border-radius: 8px; color: white; font-weight: 700; cursor: pointer; transition: opacity 0.2s; margin-bottom: 12px; }
-    .btn-action:hover { opacity: 0.9; }
+    .tab-content div[style] { color: var(--ink) !important; }
+    .btn-action { padding: 11px 16px; border: 2px solid var(--blue); border-radius: 0; color: white; background: var(--blue); font: inherit; font-weight: 700; cursor: pointer; margin-bottom: 12px; }
+    .btn-action:hover { color: var(--blue); background: white; }
+    @media (max-width: 680px) {
+      #thuzhayan-live-dashboard { width: calc(100vw - 16px); margin: 8px auto; padding: 12px; box-shadow: 7px 7px 0 var(--shadow); }
+      .telemetry-section { padding: 12px; }
+      .section-header { align-items: flex-start; flex-direction: column; }
+      .section-subtitle { text-align: left; }
+      .water-box { height: 170px; }
+      .boat-graphic { transform: translate(-50%, -50%) scale(.78); }
+      .metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
   </style>
 
   <!-- TOP STATUS BADGES -->
@@ -91,14 +97,14 @@
       <svg class="waves" viewBox="0 0 1000 260" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
         <defs>
           <linearGradient id="fc-hull-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stop-color="#023a4d" />
-            <stop offset="50%" stop-color="#046b8c" />
-            <stop offset="85%" stop-color="#43c5db" />
-            <stop offset="100%" stop-color="#83e8ff" />
+            <stop offset="0%" stop-color="#3b1d12" />
+            <stop offset="50%" stop-color="#70401f" />
+            <stop offset="85%" stop-color="#a9652b" />
+            <stop offset="100%" stop-color="#d28a43" />
           </linearGradient>
           <linearGradient id="fc-hull-top" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stop-color="#0a3e5a" />
-            <stop offset="100%" stop-color="#0d526e" />
+            <stop offset="0%" stop-color="#4a2615" />
+            <stop offset="100%" stop-color="#8a5126" />
           </linearGradient>
           <radialGradient id="fc-glow-grad" cx="50%" cy="50%" r="50%">
             <stop offset="0%" stop-color="#9beec3" stop-opacity="1.0" />
@@ -221,14 +227,14 @@
         <svg id="paddling-svg" viewBox="0 0 520 170" width="460" height="150">
           <defs>
             <linearGradient id="paddler-hull-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stop-color="#023a4d" />
-              <stop offset="50%" stop-color="#046b8c" />
-              <stop offset="85%" stop-color="#43c5db" />
-              <stop offset="100%" stop-color="#83e8ff" />
+              <stop offset="0%" stop-color="#3b1d12" />
+              <stop offset="50%" stop-color="#70401f" />
+              <stop offset="85%" stop-color="#a9652b" />
+              <stop offset="100%" stop-color="#d28a43" />
             </linearGradient>
             <linearGradient id="paddler-deck-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stop-color="#0a3e5a" />
-              <stop offset="100%" stop-color="#0d526e" />
+              <stop offset="0%" stop-color="#4a2615" />
+              <stop offset="100%" stop-color="#8a5126" />
             </linearGradient>
             <linearGradient id="oar-grad" x1="0%" y1="0%" x2="0%" y2="100%">
               <stop offset="0%" stop-color="#ffb830" />
@@ -363,7 +369,7 @@
       const el = document.getElementById('gemini-report');
       el.textContent = "⏳ Communicating with Google Cloud Gemini API...";
       try {
-        const resp = await fetch('/api/gemini/report', { cache: 'no-store' });
+        const resp = await fetch('/api/telemetry/analysis', { cache: 'no-store' });
         const data = await resp.json();
         el.textContent = data.analysis || "No analysis returned.";
       } catch (err) {
@@ -642,10 +648,10 @@
       };
 
       const poll = async () => {
-        try { updateBoat(await (await fetch('/api/latest', { cache: 'no-store' })).json()); } catch (_) {}
-        try { updatePaddle(await (await fetch('/api/paddle/latest', { cache: 'no-store' })).json()); } catch (_) {}
-        try { updateGemma(await (await fetch('/api/gemma/advice', { cache: 'no-store' })).json()); } catch (_) {}
-        try { $('report').textContent = (await (await fetch('/api/overall', { cache: 'no-store' })).json()).report; } catch (_) {}
+        try { updateBoat(await (await fetch('/api/telemetry/boat', { cache: 'no-store' })).json()); } catch (_) {}
+        try { updatePaddle(await (await fetch('/api/telemetry/paddles', { cache: 'no-store' })).json()); } catch (_) {}
+        try { updateGemma(await (await fetch('/api/telemetry/advice', { cache: 'no-store' })).json()); } catch (_) {}
+        try { $('report').textContent = (await (await fetch('/api/telemetry/summary', { cache: 'no-store' })).json()).report; } catch (_) {}
       };
 
       poll();
