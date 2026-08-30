@@ -1,0 +1,22 @@
+[GLOBAL_POSITION_INT] {'mavpackettype': 'GLOBAL_POSITION_INT', 'time_boot_ms': 730966, 'lat': 0, 'lon': 0, 'alt': 0, 'relative_alt': -790, 'vx': -1, 'vy': 0, 'vz': 14, 'hdg': 35231}
+[VFR_HUD] {'mavpackettype': 'VFR_HUD', 'airspeed': 0.0, 'groundspeed': 0.014681873843073845, 'heading': 352, 'throttle': 0, 'alt': 0.0, 'climb': -0.1423669010400772}
+[SYS_STATUS] {'mavpackettype': 'SYS_STATUS', 'onboard_control_sensors_present': 1394670863, 'onboard_control_sensors_enabled': 1109433615, 'onboard_control_sensors_health': 1127259147, 'load': 340, 'voltage_battery': 104, 'current_battery': 2690, 'battery_remaining': 0, 'drop_rate_comm': 0, 'errors_comm': 0, 'errors_count1': 0, 'errors_count2': 0, 'errors_count3': 0, 'errors_count4': 0}
+[POWER_STATUS] {'mavpackettype': 'POWER_STATUS', 'Vcc': 0, 'Vservo': 0, 'flags': 0}
+[MEMINFO] {'mavpackettype': 'MEMINFO', 'brkval': 0, 'freemem': 65535}
+[NAV_CONTROLLER_OUTPUT] {'mavpackettype': 'NAV_CONTROLLER_OUTPUT', 'nav_roll': 0.0, 'nav_pitch': 0.0, 'nav_bearing': -7, 'target_bearing': 0, 'wp_dist': 0, 'alt_error': 0.0, 'aspd_error': 0.0, 'xtrack_error': 0.0}
+[MISSION_CURRENT] {'mavpackettype': 'MISSION_CURRENT', 'seq': 0}
+[SERVO_OUTPUT_RAW] {'mavpackettype': 'SERVO_OUTPUT_RAW', 'time_usec': 730969552, 'port': 0, 'servo1_raw': 1000, 'servo2_raw': 1000, 'servo3_raw': 1000, 'servo4_raw': 1000, 'servo5_raw': 0, 'servo6_raw': 0, 'servo7_raw': 0, 'servo8_raw': 0}
+[RC_CHANNELS] {'mavpackettype': 'RC_CHANNELS', 'time_boot_ms': 730969, 'chancount': 0, 'chan1_raw': 0, 'chan2_raw': 0, 'chan3_raw': 0, 'chan4_raw': 0, 'chan5_raw': 0, 'chan6_raw': 0, 'chan7_raw': 0, 'chan8_raw': 0, 'chan9_raw': 0, 'chan10_raw': 0, 'chan11_raw': 0, 'chan12_raw': 0, 'chan13_raw': 0, 'chan14_raw': 0, 'chan15_raw': 0, 'chan16_raw': 0, 'chan17_raw': 0, 'chan18_raw': 0, 'rssi': 255}
+[RC_CHANNELS_RAW] {'mavpackettype': 'RC_CHANNELS_RAW', 'time_boot_ms': 730971, 'port': 0, 'chan1_raw': 0, 'chan2_raw': 0, 'chan3_raw': 0, 'chan4_raw': 0, 'chan5_raw': 0, 'chan6_raw': 0, 'chan7_raw': 0, 'chan8_raw': 0, 'rssi': 255}
+[RAW_IMU] {'mavpackettype': 'RAW_IMU', 'time_usec': 730971928, 'xacc': -22, 'yacc': -32, 'zacc': -996, 'xgyro': 0, 'ygyro': 2, 'zgyro': 0, 'xmag': 0, 'ymag': 0, 'zmag': 0}
+[SCALED_PRESSURE] {'mavpackettype': 'SCALED_PRESSURE', 'time_boot_ms': 730971, 'press_abs': 1009.1168823242188, 'press_diff': 0.0, 'temperature': 2639}
+[GPS_RAW_INT] {'mavpackettype': 'GPS_RAW_INT', 'time_usec': 0, 'fix_type': 0, 'lat': 0, 'lon': 0, 'alt': 0, 'eph': 65535, 'epv': 65535, 'vel': 0, 'cog': 0, 'satellites_visible': 0}
+[SYSTEM_TIME] {'mavpackettype': 'SYSTEM_TIME', 'time_unix_usec': 0, 'time_boot_ms': 730974}
+[FENCE_STATUS] {'mavpackettype': 'FENCE_STATUS', 'breach_status': 0, 'breach_count': 0, 'breach_type': 0, 'breach_time': 0}
+[RANGEFINDER] {'mavpackettype': 'RANGEFINDER', 'distance': 0.0, 'voltage': 0.0}
+[EKF_STATUS_REPORT] {'mavpackettype': 'EKF_STATUS_REPORT', 'flags': 167, 'velocity_variance': 0.0, 'pos_horiz_variance': 0.0037706743460148573, 'pos_vert_variance': 0.01769769750535488, 'compass_variance': 0.0, 'terrain_alt_variance': 0.0}
+[VIBRATION] {'mavpackettype': 'VIBRATION', 'time_usec': 730977374, 'vibration_x': 0.018890025094151497, 'vibration_y': 0.027114661410450935, 'vibration_z': 0.06714515388011932, 'clipping_0': 0, 'clipping_1': 0, 'clipping_2': 0}
+[BATTERY_STATUS] {'mavpackettype': 'BATTERY_STATUS', 'id': 0, 'battery_function': 0, 'type': 0, 'temperature': 32767, 'voltages': [104, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535], 'current_battery': 2690, 'current_consumed': 5396, 'energy_consumed': 19, 'battery_remaining': 0}
+[AHRS] {'mavpackettype': 'AHRS', 'omegaIx': 6.498986476799473e-05, 'omegaIy': -0.0003611511492636055, 'omegaIz': -0.00017316651064902544, 'accel_weight': 0.0, 'renorm_val': 0.0, 'error_rp': 0.0009772174526005983, 'error_yaw': 1.0}
+[AHRS2] {'mavpackettype': 'AHRS2', 'roll': 0.031037993729114532, 'pitch': -0.022250842303037643, 'yaw': -0.06664871424436569, 'altitude': -0.7799999713897705, 'lat': 0, 'lng': 0}
+[ATTITUDE] {'mavpackettype': 'ATTITUDE', 'time_boot_ms': 731064, 'roll': 0.03114725649356842, 'pitch': -0.02236512117087841, 'yaw': -0.13425159454345703, 'rollspeed': 0.0007127373246476054, 'pitchspeed': 0.000534139689989388, 'yawspeed': -0.0003620765055529773}

@@ -1,21 +1,6 @@
-# Python cache files
-__pycache__/
-*.py[cod]
-*$py.class
-
-# Data logs & build directories
-data/
-work/
-*.jsonl
-bin/
-
+node_modules/
+dist/
+.env
 .venv/
-env/
-venv/
-ENV/
-
-# IDE & System
-.idea/
-.vscode/
-.DS_Store
-*.swp
+__pycache__/
+*.pyc
